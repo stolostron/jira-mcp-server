@@ -31,6 +31,14 @@ class IssueResponse(BaseModel):
     components: List[str]
     comments: List["CommentResponse"]
     url: str
+    fix_versions: List[str]
+    work_type: Optional[str]
+    security_level: Optional[str]
+    due_date: Optional[str]
+    target_start: Optional[str]
+    target_end: Optional[str]
+    original_estimate: Optional[str]
+    story_points: Optional[float]
 
 class ProjectResponse(BaseModel):
     key: str
@@ -124,6 +132,15 @@ class JiraMCPServer:
             priority: Optional[str] = None,
             assignee: Optional[str] = None,
             labels: Optional[List[str]] = None,
+            fix_versions: Optional[List[str]] = None,
+            work_type: Optional[str] = None,
+            security_level: Optional[str] = None,
+            due_date: Optional[str] = None,
+            target_start: Optional[str] = None,
+            target_end: Optional[str] = None,
+            components: Optional[List[str]] = None,
+            original_estimate: Optional[str] = None,
+            story_points: Optional[float] = None,
             ctx: Optional[Context] = None
         ) -> IssueResponse:
             """Create a new Jira issue.
@@ -136,6 +153,15 @@ class JiraMCPServer:
                 priority: Issue priority
                 assignee: Username of assignee
                 labels: List of labels to add
+                fix_versions: List of fix version names
+                work_type: Work type for the issue
+                security_level: Security level name
+                due_date: Due date in YYYY-MM-DD format
+                target_start: Target start date in YYYY-MM-DD format
+                target_end: Target end date in YYYY-MM-DD format
+                components: List of component names
+                original_estimate: Original time estimate (e.g., '1h 30m')
+                story_points: Story points value
                 ctx: MCP context for progress reporting
             """
             if ctx:
@@ -148,6 +174,24 @@ class JiraMCPServer:
                 fields['assignee'] = {'name': assignee}
             if labels:
                 fields['labels'] = [{'add': label} for label in labels]
+            if fix_versions:
+                fields['fixVersions'] = [{'name': version} for version in fix_versions]
+            if work_type:
+                fields['customfield_12320040'] = work_type  # Work type custom field
+            if security_level:
+                fields['security'] = {'name': security_level}
+            if due_date:
+                fields['duedate'] = due_date
+            if target_start:
+                fields['customfield_12313941'] = target_start  # Target Start custom field
+            if target_end:
+                fields['customfield_12313942'] = target_end  # Target End custom field
+            if components:
+                fields['components'] = [{'name': component} for component in components]
+            if original_estimate:
+                fields['timeoriginalestimate'] = original_estimate
+            if story_points:
+                fields['customfield_12310243'] = story_points  # Story points custom field
             
             try:
                 issue = await self.client.create_issue(
@@ -169,6 +213,15 @@ class JiraMCPServer:
             priority: Optional[str] = None,
             assignee: Optional[str] = None,
             labels: Optional[List[str]] = None,
+            fix_versions: Optional[List[str]] = None,
+            work_type: Optional[str] = None,
+            security_level: Optional[str] = None,
+            due_date: Optional[str] = None,
+            target_start: Optional[str] = None,
+            target_end: Optional[str] = None,
+            components: Optional[List[str]] = None,
+            original_estimate: Optional[str] = None,
+            story_points: Optional[float] = None,
             ctx: Optional[Context] = None
         ) -> IssueResponse:
             """Update an existing Jira issue.
@@ -180,6 +233,15 @@ class JiraMCPServer:
                 priority: New priority
                 assignee: New assignee username
                 labels: New labels list
+                fix_versions: List of fix version names
+                work_type: Work type for the issue
+                security_level: Security level name
+                due_date: Due date in YYYY-MM-DD format
+                target_start: Target start date in YYYY-MM-DD format
+                target_end: Target end date in YYYY-MM-DD format
+                components: List of component names
+                original_estimate: Original time estimate (e.g., '1h 30m')
+                story_points: Story points value
                 ctx: MCP context for progress reporting
             """
             if ctx:
@@ -196,6 +258,24 @@ class JiraMCPServer:
                 fields['assignee'] = {'name': assignee}
             if labels:
                 fields['labels'] = [{'set': [{'add': label} for label in labels]}]
+            if fix_versions:
+                fields['fixVersions'] = [{'name': version} for version in fix_versions]
+            if work_type:
+                fields['customfield_12320040'] = work_type  # Work type custom field
+            if security_level:
+                fields['security'] = {'name': security_level}
+            if due_date:
+                fields['duedate'] = due_date
+            if target_start:
+                fields['customfield_12313941'] = target_start  # Target Start custom field
+            if target_end:
+                fields['customfield_12313942'] = target_end  # Target End custom field
+            if components:
+                fields['components'] = [{'name': component} for component in components]
+            if original_estimate:
+                fields['timeoriginalestimate'] = original_estimate
+            if story_points:
+                fields['customfield_12310243'] = story_points  # Story points custom field
             
             try:
                 issue = await self.client.update_issue(issue_key, **fields)
@@ -341,6 +421,14 @@ class JiraMCPServer:
 - **Resolution:** {issue['resolution'] or 'Unresolved'}
 - **Labels:** {', '.join(issue['labels']) if issue['labels'] else 'None'}
 - **Components:** {', '.join(issue['components']) if issue['components'] else 'None'}
+- **Fix Versions:** {', '.join(issue['fix_versions']) if issue['fix_versions'] else 'None'}
+- **Work Type:** {issue['work_type'] or 'None'}
+- **Security Level:** {issue['security_level'] or 'None'}
+- **Due Date:** {issue['due_date'] or 'None'}
+- **Target Start:** {issue['target_start'] or 'None'}
+- **Target End:** {issue['target_end'] or 'None'}
+- **Original Estimate:** {issue['original_estimate'] or 'None'}
+- **Story Points:** {issue['story_points'] or 'None'}
 
 **URL:** {issue['url']}
 """

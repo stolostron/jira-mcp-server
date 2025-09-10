@@ -213,6 +213,56 @@ class JiraClient:
         except JIRAError as e:
             raise ValueError(f"Failed to get projects: {e}")
     
+    def _extract_custom_field_value(self, field_value):
+        """Extract string value from custom field that might be a CustomFieldOption object."""
+        if field_value is None:
+            return None
+        
+        # Debug: log the type for troubleshooting
+        field_type = type(field_value).__name__
+        
+        # Handle CustomFieldOption objects from Jira library
+        if hasattr(field_value, 'value'):
+            return str(field_value.value)
+        # Handle dict-like objects that might have a 'value' key
+        if isinstance(field_value, dict) and 'value' in field_value:
+            return str(field_value['value'])
+        # Handle string values directly
+        if isinstance(field_value, str):
+            return field_value
+        # Handle objects with name attribute (common in Jira)
+        if hasattr(field_value, 'name'):
+            return str(field_value.name)
+        
+        # For CustomFieldOption specifically, try to access its string representation or properties
+        if 'CustomFieldOption' in field_type:
+            # Try various common attributes
+            for attr in ['value', 'name', 'displayName', 'id']:
+                if hasattr(field_value, attr):
+                    val = getattr(field_value, attr)
+                    if val is not None:
+                        return str(val)
+        
+        # Fallback to string conversion
+        return str(field_value)
+    
+    def _seconds_to_time_string(self, seconds: int) -> str:
+        """Convert seconds to Jira time format (e.g., '1h 30m')."""
+        if seconds is None:
+            return None
+        
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        
+        if hours > 0 and minutes > 0:
+            return f"{hours}h {minutes}m"
+        elif hours > 0:
+            return f"{hours}h"
+        elif minutes > 0:
+            return f"{minutes}m"
+        else:
+            return "0m"
+    
     def _issue_to_dict(self, issue) -> Dict[str, Any]:
         """Convert Jira issue object to dictionary."""
         return {
@@ -240,5 +290,13 @@ class JiraClient:
                 }
                 for comment in getattr(getattr(issue.fields, 'comment', None), 'comments', []) or []
             ],
-            'url': f"{self.config.server_url}/browse/{issue.key}"
+            'url': f"{self.config.server_url}/browse/{issue.key}",
+            'fix_versions': [version.name for version in getattr(issue.fields, 'fixVersions', [])],
+            'work_type': self._extract_custom_field_value(getattr(issue.fields, 'customfield_12320040', None)),  # Work type custom field
+            'security_level': getattr(issue.fields.security, 'name', None) if getattr(issue.fields, 'security', None) else None,
+            'due_date': getattr(issue.fields, 'duedate', None),
+            'target_start': getattr(issue.fields, 'customfield_12313941', None),  # Target Start custom field
+            'target_end': getattr(issue.fields, 'customfield_12313942', None),  # Target End custom field
+            'original_estimate': self._seconds_to_time_string(getattr(issue.fields, 'timeoriginalestimate', None)),
+            'story_points': getattr(issue.fields, 'customfield_12310243', None)  # Story points custom field
         }
