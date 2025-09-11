@@ -39,6 +39,8 @@ class IssueResponse(BaseModel):
     target_end: Optional[str]
     original_estimate: Optional[str]
     story_points: Optional[float]
+    git_commit: Optional[str]
+    git_pull_requests: Optional[str]
 
 class ProjectResponse(BaseModel):
     key: str
@@ -141,6 +143,8 @@ class JiraMCPServer:
             components: Optional[List[str]] = None,
             original_estimate: Optional[str] = None,
             story_points: Optional[float] = None,
+            git_commit: Optional[str] = None,
+            git_pull_requests: Optional[str] = None,
             ctx: Optional[Context] = None
         ) -> IssueResponse:
             """Create a new Jira issue.
@@ -162,6 +166,8 @@ class JiraMCPServer:
                 components: List of component names
                 original_estimate: Original time estimate (e.g., '1h 30m')
                 story_points: Story points value
+                git_commit: Git commit hash or reference
+                git_pull_requests: Git pull requests, comma separated list of pull requests URLs
                 ctx: MCP context for progress reporting
             """
             if ctx:
@@ -192,6 +198,10 @@ class JiraMCPServer:
                 fields['timeoriginalestimate'] = original_estimate
             if story_points:
                 fields['customfield_12310243'] = story_points  # Story points custom field
+            if git_commit:
+                fields['customfield_12317372'] = git_commit  # Git Commit custom field
+            if git_pull_requests:
+                fields['customfield_12310220'] = git_pull_requests  # Git Pull Requests custom field
             
             try:
                 issue = await self.client.create_issue(
@@ -222,6 +232,8 @@ class JiraMCPServer:
             components: Optional[List[str]] = None,
             original_estimate: Optional[str] = None,
             story_points: Optional[float] = None,
+            git_commit: Optional[str] = None,
+            git_pull_requests: Optional[str] = None,
             ctx: Optional[Context] = None
         ) -> IssueResponse:
             """Update an existing Jira issue.
@@ -242,6 +254,8 @@ class JiraMCPServer:
                 components: List of component names
                 original_estimate: Original time estimate (e.g., '1h 30m')
                 story_points: Story points value
+                git_commit: Git commit hash or reference
+                git_pull_requests: Git pull requests, comma separated list of pull requests URLs
                 ctx: MCP context for progress reporting
             """
             if ctx:
@@ -276,6 +290,10 @@ class JiraMCPServer:
                 fields['timeoriginalestimate'] = original_estimate
             if story_points:
                 fields['customfield_12310243'] = story_points  # Story points custom field
+            if git_commit:
+                fields['customfield_12317372'] = git_commit  # Git Commit custom field
+            if git_pull_requests:
+                fields['customfield_12310220'] = git_pull_requests  # Git Pull Requests custom field
             
             try:
                 issue = await self.client.update_issue(issue_key, **fields)
@@ -429,6 +447,8 @@ class JiraMCPServer:
 - **Target End:** {issue['target_end'] or 'None'}
 - **Original Estimate:** {issue['original_estimate'] or 'None'}
 - **Story Points:** {issue['story_points'] or 'None'}
+- **Git Commit:** {issue['git_commit'] or 'None'}
+- **Git Pull Requests:** {issue['git_pull_requests'] or 'None'}
 
 **URL:** {issue['url']}
 """

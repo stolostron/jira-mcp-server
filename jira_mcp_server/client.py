@@ -246,6 +246,24 @@ class JiraClient:
         # Fallback to string conversion
         return str(field_value)
     
+    def _extract_git_pull_requests(self, field_value):
+        """Extract git pull requests from custom field that might be a list or string."""
+        if field_value is None:
+            return None
+        
+        # If it's already a string, return it
+        if isinstance(field_value, str):
+            return field_value
+        
+        # If it's a list, join the items with commas
+        if isinstance(field_value, list):
+            # Filter out None values and convert all items to strings
+            valid_items = [str(item) for item in field_value if item is not None]
+            return ', '.join(valid_items) if valid_items else None
+        
+        # Fallback to string conversion
+        return str(field_value)
+    
     def _seconds_to_time_string(self, seconds: int) -> str:
         """Convert seconds to Jira time format (e.g., '1h 30m')."""
         if seconds is None:
@@ -298,5 +316,7 @@ class JiraClient:
             'target_start': getattr(issue.fields, 'customfield_12313941', None),  # Target Start custom field
             'target_end': getattr(issue.fields, 'customfield_12313942', None),  # Target End custom field
             'original_estimate': self._seconds_to_time_string(getattr(issue.fields, 'timeoriginalestimate', None)),
-            'story_points': getattr(issue.fields, 'customfield_12310243', None)  # Story points custom field
+            'story_points': getattr(issue.fields, 'customfield_12310243', None),  # Story points custom field
+            'git_commit': getattr(issue.fields, 'customfield_12317372', None),  # Git Commit custom field
+            'git_pull_requests': self._extract_git_pull_requests(getattr(issue.fields, 'customfield_12310220', None))  # Git Pull Requests custom field
         }
