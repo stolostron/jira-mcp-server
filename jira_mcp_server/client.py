@@ -60,7 +60,7 @@ class JiraClient:
         except JIRAError as e:
             raise ValueError(f"JQL search failed: {e}")
     
-    async def get_issue(self, issue_key: str) -> Dict[str, Any]:
+    async def get_issue(self, issue_key: str, issues_in_epic: bool = False) -> Dict[str, Any]:
         """Get a specific issue by key."""
         if not self._jira:
             raise RuntimeError("Not connected to Jira")
@@ -69,10 +69,22 @@ class JiraClient:
             issue = await self._async_call(
                 lambda: self._jira.issue(
                     issue_key,
-                    expand='changelog,transitions,comments'
+                    expand='changelog,transitions,comments,issuelinks'
                 )
             )
-            return self._issue_to_dict(issue)
+            
+            issue_dict = self._issue_to_dict(issue)
+            
+            # If requested and this is an epic, fetch issues in the epic
+            if issues_in_epic and issue_dict['issue_type'].lower() == 'epic':
+                try:
+                    epic_issues = await self.search_issues(f'"Epic Link" = {issue_key}')
+                    issue_dict['issues_in_epic'] = epic_issues
+                except Exception as e:
+                    # If we can't fetch epic issues, just log and continue
+                    issue_dict['issues_in_epic'] = []
+            
+            return issue_dict
         except JIRAError as e:
             raise ValueError(f"Failed to get issue {issue_key}: {e}")
     
@@ -98,7 +110,7 @@ class JiraClient:
         except JIRAError as e:
             raise ValueError(f"Failed to create issue: {e}")
     
-    async def update_issue(self, issue_key: str, **fields) -> Dict[str, Any]:
+    async def update_issue(self, issue_key: str, issues_in_epic: bool = False, **fields) -> Dict[str, Any]:
         """Update an existing issue."""
         if not self._jira:
             raise RuntimeError("Not connected to Jira")
@@ -107,7 +119,7 @@ class JiraClient:
             issue = await self._async_call(lambda: self._jira.issue(issue_key))
             await self._async_call(lambda: issue.update(fields=fields))
             # Return updated issue
-            return await self.get_issue(issue_key)
+            return await self.get_issue(issue_key, issues_in_epic)
         except JIRAError as e:
             raise ValueError(f"Failed to update issue {issue_key}: {e}")
     
@@ -264,6 +276,51 @@ class JiraClient:
         # Fallback to string conversion
         return str(field_value)
     
+    def _extract_issue_links(self, issue_links) -> List[Dict[str, Any]]:
+        """Extract issue links from Jira issue links field."""
+        if not issue_links:
+            return []
+        
+        links = []
+        for link in issue_links:
+            link_data = {
+                'id': str(link.id),
+                'type': {
+                    'id': str(link.type.id),
+                    'name': link.type.name,
+                    'inward': link.type.inward,
+                    'outward': link.type.outward
+                }
+            }
+            
+            # Add inward issue if present
+            if hasattr(link, 'inwardIssue') and link.inwardIssue:
+                inward = link.inwardIssue
+                link_data['inward_issue'] = {
+                    'key': inward.key,
+                    'summary': inward.fields.summary,
+                    'status': inward.fields.status.name,
+                    'priority': getattr(inward.fields.priority, 'name', '') if inward.fields.priority else '',
+                    'issue_type': inward.fields.issuetype.name,
+                    'assignee': getattr(inward.fields.assignee, 'displayName', None) if getattr(inward.fields, 'assignee', None) else None
+                }
+            
+            # Add outward issue if present
+            if hasattr(link, 'outwardIssue') and link.outwardIssue:
+                outward = link.outwardIssue
+                link_data['outward_issue'] = {
+                    'key': outward.key,
+                    'summary': outward.fields.summary,
+                    'status': outward.fields.status.name,
+                    'priority': getattr(outward.fields.priority, 'name', '') if outward.fields.priority else '',
+                    'issue_type': outward.fields.issuetype.name,
+                    'assignee': getattr(outward.fields.assignee, 'displayName', None) if getattr(outward.fields, 'assignee', None) else None
+                }
+            
+            links.append(link_data)
+        
+        return links
+    
     def _seconds_to_time_string(self, seconds: int) -> str:
         """Convert seconds to Jira time format (e.g., '1h 30m')."""
         if seconds is None:
@@ -291,7 +348,7 @@ class JiraClient:
             'priority': getattr(issue.fields.priority, 'name', '') if issue.fields.priority else '',
             'issue_type': issue.fields.issuetype.name,
             'project': issue.fields.project.key,
-            'assignee': issue.fields.assignee.displayName if issue.fields.assignee else None,
+            'assignee': getattr(issue.fields.assignee, 'displayName', None) if getattr(issue.fields, 'assignee', None) else None,
             'reporter': issue.fields.reporter.displayName if issue.fields.reporter else None,
             'created': issue.fields.created,
             'updated': issue.fields.updated,
@@ -318,5 +375,6 @@ class JiraClient:
             'original_estimate': self._seconds_to_time_string(getattr(issue.fields, 'timeoriginalestimate', None)),
             'story_points': getattr(issue.fields, 'customfield_12310243', None),  # Story points custom field
             'git_commit': getattr(issue.fields, 'customfield_12317372', None),  # Git Commit custom field
-            'git_pull_requests': self._extract_git_pull_requests(getattr(issue.fields, 'customfield_12310220', None))  # Git Pull Requests custom field
+            'git_pull_requests': self._extract_git_pull_requests(getattr(issue.fields, 'customfield_12310220', None)),  # Git Pull Requests custom field
+            'issue_links': self._extract_issue_links(getattr(issue.fields, 'issuelinks', []))
         }

@@ -14,6 +14,26 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Pydantic models for structured responses
+class LinkedIssueResponse(BaseModel):
+    key: str
+    summary: str
+    status: str
+    priority: str
+    issue_type: str
+    assignee: Optional[str]
+
+class IssueLinkTypeResponse(BaseModel):
+    id: str
+    name: str
+    inward: str
+    outward: str
+
+class IssueLinkResponse(BaseModel):
+    id: str
+    type: IssueLinkTypeResponse
+    inward_issue: Optional[LinkedIssueResponse] = None
+    outward_issue: Optional[LinkedIssueResponse] = None
+
 class IssueResponse(BaseModel):
     key: str
     summary: str
@@ -41,6 +61,8 @@ class IssueResponse(BaseModel):
     story_points: Optional[float]
     git_commit: Optional[str]
     git_pull_requests: Optional[str]
+    issue_links: List[IssueLinkResponse]
+    issues_in_epic: Optional[List["IssueResponse"]] = None
 
 class ProjectResponse(BaseModel):
     key: str
@@ -106,19 +128,21 @@ class JiraMCPServer:
         @self.mcp.tool()
         async def get_issue(
             issue_key: str,
+            issues_in_epic: bool = False,
             ctx: Optional[Context] = None
         ) -> IssueResponse:
             """Get detailed information about a specific Jira issue.
             
             Args:
                 issue_key: Jira issue key (e.g., 'PROJ-123')
+                issues_in_epic: Include issues in epic if this issue is an epic
                 ctx: MCP context for progress reporting
             """
             if ctx:
                 await ctx.info(f"Fetching issue: {issue_key}")
             
             try:
-                issue = await self.client.get_issue(issue_key)
+                issue = await self.client.get_issue(issue_key, issues_in_epic)
                 return IssueResponse(**issue)
             except Exception as e:
                 if ctx:
@@ -234,6 +258,7 @@ class JiraMCPServer:
             story_points: Optional[float] = None,
             git_commit: Optional[str] = None,
             git_pull_requests: Optional[str] = None,
+            issues_in_epic: bool = False,
             ctx: Optional[Context] = None
         ) -> IssueResponse:
             """Update an existing Jira issue.
@@ -256,6 +281,7 @@ class JiraMCPServer:
                 story_points: Story points value
                 git_commit: Git commit hash or reference
                 git_pull_requests: Git pull requests, comma separated list of pull requests URLs
+                issues_in_epic: Include issues in epic if this issue is an epic
                 ctx: MCP context for progress reporting
             """
             if ctx:
@@ -296,7 +322,7 @@ class JiraMCPServer:
                 fields['customfield_12310220'] = git_pull_requests  # Git Pull Requests custom field
             
             try:
-                issue = await self.client.update_issue(issue_key, **fields)
+                issue = await self.client.update_issue(issue_key, issues_in_epic, **fields)
                 if ctx:
                     await ctx.info(f"Updated issue: {issue_key}")
                 return IssueResponse(**issue)
@@ -409,6 +435,27 @@ class JiraMCPServer:
                     await ctx.error(f"Failed to get projects: {str(e)}")
                 raise
     
+    def _format_issue_links(self, issue_links: List[Dict[str, Any]]) -> str:
+        """Format issue links for display in resources."""
+        if not issue_links:
+            return "None"
+        
+        formatted = []
+        for link in issue_links:
+            link_type = link['type']['name']
+            
+            if link.get('inward_issue'):
+                inward = link['inward_issue']
+                relation = link['type']['inward']
+                formatted.append(f"- **{relation}** [{inward['key']}]: {inward['summary']} ({inward['status']})")
+            
+            if link.get('outward_issue'):
+                outward = link['outward_issue']
+                relation = link['type']['outward']
+                formatted.append(f"- **{relation}** [{outward['key']}]: {outward['summary']} ({outward['status']})")
+        
+        return '\n'.join(formatted) if formatted else "None"
+    
     def _setup_resources(self) -> None:
         """Set up MCP resources for Jira data."""
         
@@ -449,6 +496,9 @@ class JiraMCPServer:
 - **Story Points:** {issue['story_points'] or 'None'}
 - **Git Commit:** {issue['git_commit'] or 'None'}
 - **Git Pull Requests:** {issue['git_pull_requests'] or 'None'}
+
+## Issue Links
+{self._format_issue_links(issue['issue_links'])}
 
 **URL:** {issue['url']}
 """
