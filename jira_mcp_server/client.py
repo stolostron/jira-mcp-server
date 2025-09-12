@@ -318,5 +318,19 @@ class JiraClient:
             'original_estimate': self._seconds_to_time_string(getattr(issue.fields, 'timeoriginalestimate', None)),
             'story_points': getattr(issue.fields, 'customfield_12310243', None),  # Story points custom field
             'git_commit': getattr(issue.fields, 'customfield_12317372', None),  # Git Commit custom field
-            'git_pull_requests': self._extract_git_pull_requests(getattr(issue.fields, 'customfield_12310220', None))  # Git Pull Requests custom field
+            'git_pull_requests': self._extract_git_pull_requests(getattr(issue.fields, 'customfield_12310220', None)),  # Git Pull Requests custom field
+            'subtasks': [
+                {
+                    'key': subtask.key,
+                    'summary': subtask.fields.summary,
+                    'status': subtask.fields.status.name,
+                    'issue_type': subtask.fields.issuetype.name
+                }
+                for subtask in getattr(issue.fields, 'subtasks', [])
+            ],
+            'parent': {
+                'key': issue.fields.parent.key,
+                'summary': issue.fields.parent.fields.summary,
+                'issue_type': issue.fields.parent.fields.issuetype.name
+            } if getattr(issue.fields, 'parent', None) else None
         }

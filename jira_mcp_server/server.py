@@ -14,6 +14,17 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Pydantic models for structured responses
+class SubtaskResponse(BaseModel):
+    key: str
+    summary: str
+    status: str
+    issue_type: str
+
+class ParentResponse(BaseModel):
+    key: str
+    summary: str
+    issue_type: str
+
 class IssueResponse(BaseModel):
     key: str
     summary: str
@@ -41,6 +52,8 @@ class IssueResponse(BaseModel):
     story_points: Optional[float]
     git_commit: Optional[str]
     git_pull_requests: Optional[str]
+    subtasks: List[SubtaskResponse]
+    parent: Optional[ParentResponse]
 
 class ProjectResponse(BaseModel):
     key: str
