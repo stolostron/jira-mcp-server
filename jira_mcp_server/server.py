@@ -158,6 +158,7 @@ class JiraMCPServer:
             story_points: Optional[float] = None,
             git_commit: Optional[str] = None,
             git_pull_requests: Optional[str] = None,
+            parent: Optional[str] = None,
             ctx: Optional[Context] = None
         ) -> IssueResponse:
             """Create a new Jira issue.
@@ -166,7 +167,7 @@ class JiraMCPServer:
                 project_key: Project key (e.g., 'PROJ')
                 summary: Issue summary/title
                 description: Issue description
-                issue_type: Issue type (e.g., 'Bug', 'Task', 'Story')
+                issue_type: Issue type (e.g., 'Bug', 'Task', 'Story', 'Sub-task')
                 priority: Issue priority
                 assignee: Username of assignee
                 labels: List of labels to add
@@ -181,6 +182,7 @@ class JiraMCPServer:
                 story_points: Story points value
                 git_commit: Git commit hash or reference
                 git_pull_requests: Git pull requests, comma separated list of pull requests URLs
+                parent: Parent issue key for sub-tasks (e.g., 'PROJ-123')
                 ctx: MCP context for progress reporting
             """
             if ctx:
@@ -215,6 +217,8 @@ class JiraMCPServer:
                 fields['customfield_12317372'] = git_commit  # Git Commit custom field
             if git_pull_requests:
                 fields['customfield_12310220'] = git_pull_requests  # Git Pull Requests custom field
+            if parent:
+                fields['parent'] = {'key': parent}  # Parent issue for sub-tasks
             
             try:
                 issue = await self.client.create_issue(
