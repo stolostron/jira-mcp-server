@@ -82,6 +82,12 @@ class JiraClient:
         if not self._jira:
             raise RuntimeError("Not connected to Jira")
         
+        # Convert timetracking.originalEstimate from time string to minutes for Jira API
+        if 'timetracking' in fields and isinstance(fields['timetracking'], dict):
+            if 'originalEstimate' in fields['timetracking'] and isinstance(fields['timetracking']['originalEstimate'], str):
+                seconds = self._time_string_to_seconds(fields['timetracking']['originalEstimate'])
+                fields['timetracking']['originalEstimate'] = str(seconds // 60)  # Jira expects minutes as string
+        
         issue_dict = {
             'project': {'key': project_key},
             'summary': summary,
@@ -102,6 +108,12 @@ class JiraClient:
         """Update an existing issue."""
         if not self._jira:
             raise RuntimeError("Not connected to Jira")
+        
+        # Convert timetracking.originalEstimate from time string to minutes for Jira API
+        if 'timetracking' in fields and isinstance(fields['timetracking'], dict):
+            if 'originalEstimate' in fields['timetracking'] and isinstance(fields['timetracking']['originalEstimate'], str):
+                seconds = self._time_string_to_seconds(fields['timetracking']['originalEstimate'])
+                fields['timetracking']['originalEstimate'] = str(seconds // 60)  # Jira expects minutes as string
         
         try:
             issue = await self._async_call(lambda: self._jira.issue(issue_key))
@@ -213,6 +225,62 @@ class JiraClient:
         except JIRAError as e:
             raise ValueError(f"Failed to get projects: {e}")
     
+    async def get_raw_issue_fields(self, issue_key: str) -> Dict[str, Any]:
+        """Get all raw fields from a Jira issue for debugging purposes."""
+        if not self._jira:
+            raise RuntimeError("Not connected to Jira")
+        
+        try:
+            issue = await self._async_call(
+                lambda: self._jira.issue(
+                    issue_key,
+                    expand='changelog,transitions,comments'
+                )
+            )
+            
+            # Convert the raw issue fields to a dictionary
+            raw_fields = {}
+            
+            # Get all field attributes
+            for field_name in dir(issue.fields):
+                if not field_name.startswith('_'):
+                    try:
+                        field_value = getattr(issue.fields, field_name)
+                        if field_value is not None:
+                            # Try to serialize the field value
+                            if hasattr(field_value, '__dict__'):
+                                # Complex object, get its attributes
+                                if hasattr(field_value, 'name'):
+                                    raw_fields[field_name] = field_value.name
+                                elif hasattr(field_value, 'value'):
+                                    raw_fields[field_name] = field_value.value
+                                else:
+                                    raw_fields[field_name] = str(field_value)
+                            elif isinstance(field_value, list):
+                                # Handle lists
+                                raw_fields[field_name] = [
+                                    item.name if hasattr(item, 'name') else str(item) 
+                                    for item in field_value
+                                ]
+                            else:
+                                # Simple value
+                                raw_fields[field_name] = field_value
+                    except Exception as e:
+                        # If we can't access a field, note the error
+                        raw_fields[field_name] = f"Error accessing field: {str(e)}"
+            
+            # Add some metadata
+            result = {
+                'issue_key': issue.key,
+                'raw_fields': raw_fields,
+                'field_count': len(raw_fields)
+            }
+            
+            return result
+            
+        except JIRAError as e:
+            raise ValueError(f"Failed to get raw fields for issue {issue_key}: {e}")
+    
     def _extract_custom_field_value(self, field_value):
         """Extract string value from custom field that might be a CustomFieldOption object."""
         if field_value is None:
@@ -264,22 +332,58 @@ class JiraClient:
         # Fallback to string conversion
         return str(field_value)
     
+    def _time_string_to_seconds(self, time_string: str) -> int:
+        """Convert Jira time format (e.g., '1h 30m', '2d', '45m') to seconds."""
+        if not time_string:
+            return None
+        
+        # Remove whitespace and convert to lowercase
+        time_string = time_string.replace(' ', '').lower()
+        
+        total_seconds = 0
+        current_number = ''
+        
+        for char in time_string:
+            if char.isdigit() or char == '.':
+                current_number += char
+            elif char in ['d', 'h', 'm', 's']:
+                if current_number:
+                    value = float(current_number)
+                    if char == 'd':  # days
+                        total_seconds += value * 24 * 3600
+                    elif char == 'h':  # hours
+                        total_seconds += value * 3600
+                    elif char == 'm':  # minutes
+                        total_seconds += value * 60
+                    elif char == 's':  # seconds
+                        total_seconds += value
+                    current_number = ''
+        
+        return int(total_seconds)
+    
     def _seconds_to_time_string(self, seconds: int) -> str:
         """Convert seconds to Jira time format (e.g., '1h 30m')."""
         if seconds is None:
             return None
         
-        hours = seconds // 3600
-        minutes = (seconds % 3600) // 60
+        # Convert to days, hours, minutes
+        days = seconds // (24 * 3600)
+        remaining_seconds = seconds % (24 * 3600)
+        hours = remaining_seconds // 3600
+        minutes = (remaining_seconds % 3600) // 60
         
-        if hours > 0 and minutes > 0:
-            return f"{hours}h {minutes}m"
-        elif hours > 0:
-            return f"{hours}h"
-        elif minutes > 0:
-            return f"{minutes}m"
-        else:
+        parts = []
+        if days > 0:
+            parts.append(f"{days}d")
+        if hours > 0:
+            parts.append(f"{hours}h")
+        if minutes > 0:
+            parts.append(f"{minutes}m")
+        
+        if not parts:
             return "0m"
+        
+        return " ".join(parts)
     
     def _issue_to_dict(self, issue) -> Dict[str, Any]:
         """Convert Jira issue object to dictionary."""

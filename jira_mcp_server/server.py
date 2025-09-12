@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 from typing import List, Dict, Any, Optional
 from fastmcp import FastMCP, Context
 from pydantic import BaseModel
@@ -12,6 +13,7 @@ from .client import JiraClient
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 # Pydantic models for structured responses
 class SubtaskResponse(BaseModel):
@@ -210,7 +212,7 @@ class JiraMCPServer:
             if components:
                 fields['components'] = [{'name': component} for component in components]
             if original_estimate:
-                fields['timeoriginalestimate'] = original_estimate
+                fields['timetracking'] = {'originalEstimate': original_estimate}
             if story_points:
                 fields['customfield_12310243'] = story_points  # Story points custom field
             if git_commit:
@@ -304,7 +306,7 @@ class JiraMCPServer:
             if components:
                 fields['components'] = [{'name': component} for component in components]
             if original_estimate:
-                fields['timeoriginalestimate'] = original_estimate
+                fields['timetracking'] = {'originalEstimate': original_estimate}
             if story_points:
                 fields['customfield_12310243'] = story_points  # Story points custom field
             if git_commit:
@@ -394,6 +396,7 @@ class JiraMCPServer:
             if ctx:
                 await ctx.info(f"Logging {time_spent} on issue: {issue_key}")
             
+            
             try:
                 work_log = await self.client.log_work(issue_key, time_spent, comment, started)
                 if ctx:
@@ -424,6 +427,30 @@ class JiraMCPServer:
             except Exception as e:
                 if ctx:
                     await ctx.error(f"Failed to get projects: {str(e)}")
+                raise
+
+        @self.mcp.tool()
+        async def debug_issue_fields(
+            issue_key: str,
+            ctx: Optional[Context] = None
+        ) -> Dict[str, Any]:
+            """Debug function to show all raw Jira fields for an issue.
+            
+            Args:
+                issue_key: Jira issue key (e.g., 'PROJ-123')
+                ctx: MCP context for progress reporting
+            """
+            if ctx:
+                await ctx.info(f"Debugging raw fields for issue: {issue_key}")
+            
+            try:
+                raw_issue = await self.client.get_raw_issue_fields(issue_key)
+                if ctx:
+                    await ctx.info(f"Retrieved raw fields for issue: {issue_key}")
+                return raw_issue
+            except Exception as e:
+                if ctx:
+                    await ctx.error(f"Failed to get raw fields for {issue_key}: {str(e)}")
                 raise
     
     def _setup_resources(self) -> None:
