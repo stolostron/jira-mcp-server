@@ -394,7 +394,7 @@ class JiraClient:
     
     def _issue_to_dict(self, issue) -> Dict[str, Any]:
         """Convert Jira issue object to dictionary."""
-        return {
+        result = {
             'key': issue.key,
             'summary': issue.fields.summary,
             'description': getattr(issue.fields, 'description', ''),
@@ -445,3 +445,10 @@ class JiraClient:
                 'issue_type': issue.fields.parent.fields.issuetype.name
             } if getattr(issue.fields, 'parent', None) else None
         }
+
+        # Add Epic Link field when issue type is Story
+        if issue.fields.issuetype.name == 'Story':
+            epic_link = getattr(issue.fields, 'customfield_12311140', None)
+            result['epic_link'] = epic_link
+
+        return result
