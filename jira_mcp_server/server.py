@@ -15,6 +15,27 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _validate_git_commit_sha(sha: str) -> None:
+    """Validate that a git commit SHA is either 40 characters (SHA-1) or 64 characters (SHA-256).
+
+    Args:
+        sha: The git commit SHA to validate
+
+    Raises:
+        ValueError: If the SHA is not a valid length or contains invalid characters
+    """
+    if not sha:
+        return
+
+    # Check if it's all hexadecimal characters
+    if not all(c in '0123456789abcdefABCDEF' for c in sha):
+        raise ValueError(f"Git commit SHA must contain only hexadecimal characters: {sha}")
+
+    # Check length - must be either 40 (SHA-1) or 64 (SHA-256) characters
+    if len(sha) not in [40, 64]:
+        raise ValueError(f"Git commit SHA must be either 40 characters (SHA-1) or 64 characters (SHA-256), got {len(sha)} characters: {sha}")
+
+
 # Pydantic models for structured responses
 class SubtaskResponse(BaseModel):
     key: str
@@ -216,6 +237,7 @@ class JiraMCPServer:
             if story_points:
                 fields['customfield_12310243'] = story_points  # Story points custom field
             if git_commit:
+                _validate_git_commit_sha(git_commit)
                 fields['customfield_12317372'] = git_commit  # Git Commit custom field
             if git_pull_requests:
                 fields['customfield_12310220'] = git_pull_requests  # Git Pull Requests custom field
@@ -310,10 +332,11 @@ class JiraMCPServer:
             if story_points:
                 fields['customfield_12310243'] = story_points  # Story points custom field
             if git_commit:
+                _validate_git_commit_sha(git_commit)
                 fields['customfield_12317372'] = git_commit  # Git Commit custom field
             if git_pull_requests:
                 fields['customfield_12310220'] = git_pull_requests  # Git Pull Requests custom field
-            
+
             try:
                 issue = await self.client.update_issue(issue_key, **fields)
                 if ctx:
