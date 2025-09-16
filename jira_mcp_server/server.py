@@ -354,20 +354,22 @@ class JiraMCPServer:
         async def add_comment(
             issue_key: str,
             comment: str,
+            security_level: Optional[str] = "Red Hat Employee",
             ctx: Optional[Context] = None
         ) -> CommentResponse:
             """Add a comment to a Jira issue.
-            
+
             Args:
                 issue_key: Jira issue key (e.g., 'PROJ-123')
                 comment: Comment text
+                security_level: Security level name (default: "Red Hat Employee")
                 ctx: MCP context for progress reporting
             """
             if ctx:
                 await ctx.info(f"Adding comment to issue: {issue_key}")
             
             try:
-                comment_data = await self.client.add_comment(issue_key, comment)
+                comment_data = await self.client.add_comment(issue_key, comment, security_level)
                 if ctx:
                     await ctx.info(f"Added comment to issue: {issue_key}")
                 return CommentResponse(**comment_data)

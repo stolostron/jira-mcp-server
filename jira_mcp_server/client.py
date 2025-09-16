@@ -151,15 +151,22 @@ class JiraClient:
         except JIRAError as e:
             raise ValueError(f"Failed to transition issue {issue_key}: {e}")
     
-    async def add_comment(self, issue_key: str, comment: str) -> Dict[str, Any]:
+    async def add_comment(self, issue_key: str, comment: str, security_level: Optional[str] = None) -> Dict[str, Any]:
         """Add a comment to an issue."""
         if not self._jira:
             raise RuntimeError("Not connected to Jira")
-        
+
         try:
             issue = await self._async_call(lambda: self._jira.issue(issue_key))
+
+            # Build comment parameters
+            comment_kwargs = {}
+            if security_level:
+                # Use 'group' type for security levels like "Red Hat Employee"
+                comment_kwargs['visibility'] = {'type': 'group', 'value': security_level}
+
             comment_obj = await self._async_call(
-                lambda: self._jira.add_comment(issue, comment)
+                lambda: self._jira.add_comment(issue, comment, **comment_kwargs)
             )
             
             return {
