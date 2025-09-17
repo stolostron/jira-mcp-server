@@ -217,11 +217,11 @@ class JiraMCPServer:
             if assignee:
                 fields['assignee'] = {'name': assignee}
             if labels:
-                fields['labels'] = [{'add': label} for label in labels]
+                fields['labels'] = labels
             if fix_versions:
                 fields['fixVersions'] = [{'name': version} for version in fix_versions]
             if work_type:
-                fields['customfield_12320040'] = work_type  # Work type custom field
+                fields['customfield_12320040'] = {'id': str(work_type)}  # Work type custom field
             if security_level:
                 fields['security'] = {'name': security_level}
             if due_date:
@@ -312,11 +312,11 @@ class JiraMCPServer:
             if assignee:
                 fields['assignee'] = {'name': assignee}
             if labels:
-                fields['labels'] = [{'set': [{'add': label} for label in labels]}]
+                fields['labels'] = labels
             if fix_versions:
                 fields['fixVersions'] = [{'name': version} for version in fix_versions]
             if work_type:
-                fields['customfield_12320040'] = work_type  # Work type custom field
+                fields['customfield_12320040'] = {'id': str(work_type)}  # Work type custom field
             if security_level:
                 fields['security'] = {'name': security_level}
             if due_date:
