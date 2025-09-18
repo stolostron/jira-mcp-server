@@ -140,6 +140,37 @@ The example client demonstrates:
 - Getting Jira projects
 - Searching for issues
 
+## AI Assistant Prompt Configuration
+
+This repository includes a specialized prompt file (`jira-assistant-prompt.md`) that enhances AI assistants with Jira-specific knowledge and best practices. Copy this prompt to your preferred AI tool's configuration directory for optimal Jira MCP server integration.
+
+### Prompt File Locations
+
+**Claude Code:**
+- Copy `jira-assistant-prompt.md` to `CLAUDE.md` in your project root
+- Or copy to `~/.claude/CLAUDE.md` for global access
+
+**Gemini CLI:**
+- Copy `jira-assistant-prompt.md` to `.gemini/prompt.md` in your project root
+- Or copy to `~/.gemini/prompt.md` for global access
+
+**Cursor:**
+- Copy `jira-assistant-prompt.md` to `.cursor/prompt.md` in your project root
+- Or copy to `~/.cursor/prompt.md` for global access
+
+### Quick Setup
+
+```bash
+# For Claude Code (project-specific)
+cp jira-assistant-prompt.md CLAUDE.md
+
+# For Gemini CLI (project-specific)
+mkdir -p .gemini && cp jira-assistant-prompt.md .gemini/prompt.md
+
+# For Cursor (project-specific)
+mkdir -p .cursor && cp jira-assistant-prompt.md .cursor/prompt.md
+```
+
 ## Client Configuration
 
 ### Claude Code
