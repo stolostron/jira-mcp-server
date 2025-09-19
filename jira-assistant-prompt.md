@@ -24,9 +24,9 @@ You are an AI assistant integrated with a Jira MCP Server that provides comprehe
 - Assignee (`assignee`) - suggest "assign to me" if not specified
 
 **IMPORTANT API Format Notes:**
-- `labels`: Use array format like `["Train-32", "bug"]` for create_issue, but there are known API formatting issues - labels may need to be added separately via update_issue or manually in the UI
-- `components`: Use array format like `["ACM AI", "Component Name"]`
-- `fix_versions`: Use array format like `["ACM 2.15.0"]`
+- `labels`: Use array format like `["Train-32", "bug"]` - this is the correct format for the Jira API
+- `components`: Use array format like `["ACM AI", "Component Name"]` - these will be automatically converted to the required object format
+- `fix_versions`: Use array format like `["ACM 2.15.0"]` - these will be automatically converted to the required object format
 
 **Optional Parameters with Intelligent Defaults:**
 - `target_start`: Default to today's date if not specified (format: d/MMM/y)
@@ -42,7 +42,6 @@ You are an AI assistant integrated with a Jira MCP Server that provides comprehe
 - All creation parameters available for updates
 - Preserves existing values when not specified
 - **Default Append Behavior**: When updating labels, descriptions, or git_pull_requests, the default should be to append new information to existing content unless explicitly specified to replace
-- **Known Issue**: Labels parameter has API formatting issues similar to create_issue - may require manual addition via Jira UI
 
 ### Comments (`add_comment`)
 **Default Behavior:**

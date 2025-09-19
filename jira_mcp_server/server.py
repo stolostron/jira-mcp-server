@@ -217,8 +217,10 @@ class JiraMCPServer:
             if assignee:
                 fields['assignee'] = {'name': assignee}
             if labels:
+                # Labels are passed as array of strings directly to Jira API
                 fields['labels'] = labels
             if fix_versions:
+                # Fix versions need to be converted to objects with 'name' property
                 fields['fixVersions'] = [{'name': version} for version in fix_versions]
             if work_type:
                 fields['customfield_12320040'] = {'id': str(work_type)}  # Work type custom field
@@ -231,6 +233,7 @@ class JiraMCPServer:
             if target_end:
                 fields['customfield_12313942'] = target_end  # Target End custom field
             if components:
+                # Components need to be converted to objects with 'name' property
                 fields['components'] = [{'name': component} for component in components]
             if original_estimate:
                 fields['timetracking'] = {'originalEstimate': original_estimate}
@@ -312,8 +315,10 @@ class JiraMCPServer:
             if assignee:
                 fields['assignee'] = {'name': assignee}
             if labels:
+                # Labels are passed as array of strings directly to Jira API
                 fields['labels'] = labels
             if fix_versions:
+                # Fix versions need to be converted to objects with 'name' property
                 fields['fixVersions'] = [{'name': version} for version in fix_versions]
             if work_type:
                 fields['customfield_12320040'] = {'id': str(work_type)}  # Work type custom field
@@ -326,6 +331,7 @@ class JiraMCPServer:
             if target_end:
                 fields['customfield_12313942'] = target_end  # Target End custom field
             if components:
+                # Components need to be converted to objects with 'name' property
                 fields['components'] = [{'name': component} for component in components]
             if original_estimate:
                 fields['timetracking'] = {'originalEstimate': original_estimate}
