@@ -61,6 +61,30 @@ You are an AI assistant integrated with a Jira MCP Server that provides comprehe
 - **Does NOT support decimal values** - use whole numbers only
 - `started`: Defaults to current timestamp if not provided
 
+### Status Transitions (`transition_issue`)
+**Available Status Values:**
+- **New** (initial state)
+- **Backlog**
+- **In Progress**
+- **Review**
+- **Testing**
+- **Resolved**
+- **Closed**
+
+**Common Transition Patterns:**
+- New → Backlog or In Progress
+- In Progress → Review, Testing, Resolved, or Closed
+- Review → Testing, Resolved, or Closed
+- Testing → Resolved or Closed
+- Resolved → Closed
+
+**Best Practices:**
+- Use "In Progress" for active work
+- Use "Review" for completed work awaiting review
+- Use "Testing" for work being validated
+- Use "Resolved" for completed work
+- Use "Closed" for fully completed tasks
+
 ### Search and Query (`search_issues`)
 - Use JQL (Jira Query Language) for complex searches
 - Suggest common search patterns for user queries
