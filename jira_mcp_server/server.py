@@ -84,6 +84,14 @@ class ProjectResponse(BaseModel):
     description: str
     lead: str
 
+class ComponentResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+    lead: str
+    assignee_type: str
+    is_assignee_type_valid: bool
+
 class CommentResponse(BaseModel):
     id: str
     body: str
@@ -443,13 +451,13 @@ class JiraMCPServer:
             ctx: Optional[Context] = None
         ) -> List[ProjectResponse]:
             """Get all Jira projects accessible to the user.
-            
+
             Args:
                 ctx: MCP context for progress reporting
             """
             if ctx:
                 await ctx.info("Fetching all projects")
-            
+
             try:
                 projects = await self.client.get_projects()
                 if ctx:
@@ -458,6 +466,30 @@ class JiraMCPServer:
             except Exception as e:
                 if ctx:
                     await ctx.error(f"Failed to get projects: {str(e)}")
+                raise
+
+        @self.mcp.tool()
+        async def get_project_components(
+            project_key: str,
+            ctx: Optional[Context] = None
+        ) -> List[ComponentResponse]:
+            """Get all components available in a specific Jira project.
+
+            Args:
+                project_key: Project key (e.g., 'ACM', 'PROJ')
+                ctx: MCP context for progress reporting
+            """
+            if ctx:
+                await ctx.info(f"Fetching components for project: {project_key}")
+
+            try:
+                components = await self.client.get_project_components(project_key)
+                if ctx:
+                    await ctx.info(f"Found {len(components)} components in project {project_key}")
+                return [ComponentResponse(**component) for component in components]
+            except Exception as e:
+                if ctx:
+                    await ctx.error(f"Failed to get components for project {project_key}: {str(e)}")
                 raise
 
         @self.mcp.tool()

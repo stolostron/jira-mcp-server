@@ -217,7 +217,7 @@ class JiraClient:
         """Get all projects."""
         if not self._jira:
             raise RuntimeError("Not connected to Jira")
-        
+
         try:
             projects = await self._async_call(lambda: self._jira.projects())
             return [
@@ -231,6 +231,29 @@ class JiraClient:
             ]
         except JIRAError as e:
             raise ValueError(f"Failed to get projects: {e}")
+
+    async def get_project_components(self, project_key: str) -> List[Dict[str, Any]]:
+        """Get all components for a specific project."""
+        if not self._jira:
+            raise RuntimeError("Not connected to Jira")
+
+        try:
+            components = await self._async_call(
+                lambda: self._jira.project_components(project_key)
+            )
+            return [
+                {
+                    'id': component.id,
+                    'name': component.name,
+                    'description': getattr(component, 'description', '') or '',
+                    'lead': getattr(component.lead, 'displayName', '') if getattr(component, 'lead', None) else '',
+                    'assignee_type': getattr(component, 'assigneeType', ''),
+                    'is_assignee_type_valid': getattr(component, 'isAssigneeTypeValid', False)
+                }
+                for component in components
+            ]
+        except JIRAError as e:
+            raise ValueError(f"Failed to get components for project {project_key}: {e}")
     
     async def get_raw_issue_fields(self, issue_key: str) -> Dict[str, Any]:
         """Get all raw fields from a Jira issue for debugging purposes."""
