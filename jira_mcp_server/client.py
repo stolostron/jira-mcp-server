@@ -397,7 +397,7 @@ class JiraClient:
         result = {
             'key': issue.key,
             'summary': issue.fields.summary,
-            'description': getattr(issue.fields, 'description', ''),
+            'description': getattr(issue.fields, 'description', '') or '',
             'status': issue.fields.status.name,
             'priority': getattr(issue.fields.priority, 'name', '') if issue.fields.priority else '',
             'issue_type': issue.fields.issuetype.name,
