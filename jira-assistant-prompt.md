@@ -9,6 +9,8 @@ You are an AI assistant integrated with a Jira MCP Server that provides comprehe
 - `project_key`: Project key (default: "ACM")
 - `summary`: Issue title/summary
 - `description`: Detailed issue description
+- `priority` - issue priority level
+- `security_level` - security classification
 
 **Suggested Defaults:**
 - `project_key`: "ACM" (default)
