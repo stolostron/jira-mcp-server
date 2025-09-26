@@ -107,6 +107,21 @@ class WorkLogResponse(BaseModel):
     created: str
     started: str
 
+class LinkResponse(BaseModel):
+    link_type: str
+    inward_issue: str
+    outward_issue: str
+    inward_description: Optional[str]
+    outward_description: Optional[str]
+    comment: Optional[str]
+    created: bool
+
+class LinkTypeResponse(BaseModel):
+    id: str
+    name: str
+    inward: str
+    outward: str
+
 class JiraMCPServer:
     """MCP Server for Jira integration."""
     
@@ -490,6 +505,62 @@ class JiraMCPServer:
             except Exception as e:
                 if ctx:
                     await ctx.error(f"Failed to get components for project {project_key}: {str(e)}")
+                raise
+
+        @self.mcp.tool()
+        async def link_issue(
+            link_type: str,
+            inward_issue: str,
+            outward_issue: str,
+            comment: Optional[str] = None,
+            security_level: Optional[str] = None,
+            ctx: Optional[Context] = None
+        ) -> LinkResponse:
+            """Create a link between two Jira issues.
+            
+            Args:
+                link_type: The type of link to create (e.g., 'Blocks', 'Relates', 'Duplicates')
+                inward_issue: The issue key to link from (e.g., 'PROJ-123')
+                outward_issue: The issue key to link to (e.g., 'PROJ-456')
+                comment: Optional comment to add when creating the link
+                security_level: Optional security level for the comment (default: None)
+                ctx: MCP context for progress reporting
+            """
+            if ctx:
+                await ctx.info(f"Creating link: {inward_issue} {link_type} {outward_issue}")
+            
+            try:
+                link_data = await self.client.create_issue_link(
+                    link_type, inward_issue, outward_issue, comment, security_level
+                )
+                if ctx:
+                    await ctx.info(f"Successfully created link between {inward_issue} and {outward_issue}")
+                return LinkResponse(**link_data)
+            except Exception as e:
+                if ctx:
+                    await ctx.error(f"Failed to create link: {str(e)}")
+                raise
+
+        @self.mcp.tool()
+        async def get_link_types(
+            ctx: Optional[Context] = None
+        ) -> List[LinkTypeResponse]:
+            """Get all available issue link types.
+            
+            Args:
+                ctx: MCP context for progress reporting
+            """
+            if ctx:
+                await ctx.info("Fetching available link types")
+            
+            try:
+                link_types = await self.client.get_issue_link_types()
+                if ctx:
+                    await ctx.info(f"Found {len(link_types)} link types")
+                return [LinkTypeResponse(**link_type) for link_type in link_types]
+            except Exception as e:
+                if ctx:
+                    await ctx.error(f"Failed to get link types: {str(e)}")
                 raise
 
         @self.mcp.tool()

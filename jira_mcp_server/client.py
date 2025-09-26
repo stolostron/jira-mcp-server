@@ -255,6 +255,91 @@ class JiraClient:
         except JIRAError as e:
             raise ValueError(f"Failed to get components for project {project_key}: {e}")
     
+    async def create_issue_link(
+        self, 
+        link_type: str, 
+        inward_issue: str, 
+        outward_issue: str, 
+        comment: Optional[str] = None,
+        security_level: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Create a link between two issues.
+        
+        Args:
+            link_type: The type of link to create (e.g., 'Blocks', 'Relates', 'Duplicates')
+            inward_issue: The issue key to link from (e.g., 'PROJ-123')
+            outward_issue: The issue key to link to (e.g., 'PROJ-456')
+            comment: Optional comment to add when creating the link
+            security_level: Optional security level for the comment
+            
+        Returns:
+            Dict containing link information
+        """
+        if not self._jira:
+            raise RuntimeError("Not connected to Jira")
+        
+        try:
+            # Prepare comment data if provided
+            comment_data = None
+            if comment:
+                comment_data = {'body': comment}
+                if security_level:
+                    comment_data['visibility'] = {'type': 'group', 'value': security_level}
+            
+            # Create the issue link
+            response = await self._async_call(
+                lambda: self._jira.create_issue_link(
+                    type=link_type,
+                    inwardIssue=inward_issue,
+                    outwardIssue=outward_issue,
+                    comment=comment_data
+                )
+            )
+            
+            # Get link types to find the proper names
+            link_types = await self._async_call(lambda: self._jira.issue_link_types())
+            link_type_info = None
+            for lt in link_types:
+                if lt.name.lower() == link_type.lower():
+                    link_type_info = lt
+                    break
+            
+            return {
+                'link_type': link_type,
+                'inward_issue': inward_issue,
+                'outward_issue': outward_issue,
+                'inward_description': link_type_info.inward if link_type_info else None,
+                'outward_description': link_type_info.outward if link_type_info else None,
+                'comment': comment,
+                'created': True
+            }
+            
+        except JIRAError as e:
+            raise ValueError(f"Failed to create issue link: {e}")
+    
+    async def get_issue_link_types(self) -> List[Dict[str, Any]]:
+        """Get available issue link types.
+        
+        Returns:
+            List of available link types with their descriptions
+        """
+        if not self._jira:
+            raise RuntimeError("Not connected to Jira")
+        
+        try:
+            link_types = await self._async_call(lambda: self._jira.issue_link_types())
+            return [
+                {
+                    'id': lt.id,
+                    'name': lt.name,
+                    'inward': lt.inward,
+                    'outward': lt.outward
+                }
+                for lt in link_types
+            ]
+        except JIRAError as e:
+            raise ValueError(f"Failed to get issue link types: {e}")
+
     async def get_raw_issue_fields(self, issue_key: str) -> Dict[str, Any]:
         """Get all raw fields from a Jira issue for debugging purposes."""
         if not self._jira:
