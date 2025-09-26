@@ -18,8 +18,10 @@ A Model Context Protocol (MCP) server that provides seamless integration with Ji
 ## Features
 
 - **Issue Management**: Search, create, update, and transition Jira issues
-- **Project Access**: List and browse Jira projects
-- **Comments**: Add comments to issues
+- **Issue Linking**: Create links between issues with different relationship types (blocks, relates to, etc.)
+- **Project Access**: List and browse Jira projects and components
+- **Comments**: Add comments to issues with security levels
+- **Time Logging**: Log work time on issues with detailed comments
 - **JQL Support**: Full Jira Query Language support for advanced searching
 - **Rate Limiting**: Built-in throttling to respect Jira API limits
 - **Async Operations**: Fully asynchronous for optimal performance
@@ -227,6 +229,8 @@ Once connected, you can ask Claude:
 - "What are the high priority issues in the PROJECT project?"
 - "Add a comment to issue PROJ-123 saying it's been fixed"
 - "Log 2 hours of work on issue PROJ-123 for debugging the login bug"
+- "Link issue PROJ-123 to PROJ-456 with a 'blocks' relationship"
+- "Show me all available link types for this Jira instance"
 
 ### Gemini CLI
 
@@ -270,6 +274,9 @@ gemini "Create a new bug report titled 'Login Error' in project PROJ"
 
 # Log time on an issue
 gemini "Log 2 hours on issue PROJ-123 for implementing the new feature"
+
+# Link two issues together
+gemini "Link issue PROJ-123 to PROJ-456 with a blocks relationship"
 ```
 
 ### Cursor
@@ -360,10 +367,43 @@ add_comment(
 )
 ```
 
+### `link_issue`
+Create a link between two issues:
+```python
+link_issue(
+    link_type="Blocks",
+    inward_issue="PROJ-123",
+    outward_issue="PROJ-456",
+    comment="This issue blocks the other one"
+)
+```
+
+### `get_link_types`
+Get all available issue link types:
+```python
+get_link_types()
+```
+
+### `log_time`
+Log time spent on an issue:
+```python
+log_time(
+    issue_key="PROJ-123",
+    time_spent="2h 30m",
+    comment="Implemented new feature"
+)
+```
+
 ### `get_projects`
 List all accessible projects:
 ```python
 get_projects()
+```
+
+### `get_project_components`
+Get components for a specific project:
+```python
+get_project_components(project_key="PROJ")
 ```
 
 ### Available Resources
