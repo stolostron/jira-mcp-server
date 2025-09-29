@@ -283,6 +283,8 @@ gemini "Link issue PROJ-123 to PROJ-456 with a blocks relationship"
 
 Cursor is a code editor that supports MCP servers for AI-powered development assistance.
 
+**Recommended model**: GPT-5 or claude-4-sonnet-1m (MAX)
+
 #### Configuration File Locations
 
 - **Project-specific**: `<project-root>/.cursor/mcp.json`
