@@ -1,5 +1,7 @@
 # Jira MCP Server Makefile
 
+SHELL := /bin/bash
+
 .PHONY: help setup-prompts clean
 
 # Default target
