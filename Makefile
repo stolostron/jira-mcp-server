@@ -36,21 +36,16 @@ setup-prompts:
 	echo "  Assignee Email: $$ASSIGNEE_EMAIL"; \
 	echo "  Security Level: $$SECURITY_LEVEL"; \
 	echo ""; \
-	echo "Creating CLAUDE.md..."; \
-	cp jira-assistant-prompt.md CLAUDE.md; \
-	sed -i.bak 's/"PROJ"/"'$$PROJECT_KEY'"/g' CLAUDE.md; \
-	sed -i.bak 's/PROJ-/'$$PROJECT_KEY'-/g' CLAUDE.md; \
-	sed -i.bak "s|SECURITY_PLACEHOLDER|$${SECURITY_LEVEL}|g" CLAUDE.md; \
-	sed -i.bak 's/- Assignee (`assignee`) - suggest "assign to me" if not specified/- Assignee (`assignee`) - suggest "assign to me" if not specified (default: "'$$ASSIGNEE_EMAIL'")/g' CLAUDE.md; \
-	rm CLAUDE.md.bak; \
-	echo "CLAUDE.md created successfully"; \
-	echo "Creating GEMINI.md..."; \
-	cp jira-assistant-prompt.md GEMINI.md; \
-	sed -i.bak 's/"PROJ"/"'$$PROJECT_KEY'"/g' GEMINI.md; \
-	sed -i.bak 's/PROJ-/'$$PROJECT_KEY'-/g' GEMINI.md; \
-	sed -i.bak "s|SECURITY_PLACEHOLDER|$${SECURITY_LEVEL}|g" GEMINI.md; \
-	sed -i.bak 's/- Assignee (`assignee`) - suggest "assign to me" if not specified/- Assignee (`assignee`) - suggest "assign to me" if not specified (default: "'$$ASSIGNEE_EMAIL'")/g' GEMINI.md; \
-	rm GEMINI.md.bak; \
+	for FILE in CLAUDE.md GEMINI.md; do \
+		echo "Creating $$FILE..."; \
+		cp jira-assistant-prompt.md $$FILE; \
+		sed -i.bak 's/"PROJ"/"'$$PROJECT_KEY'"/g' $$FILE; \
+		sed -i.bak 's/PROJ-/'$$PROJECT_KEY'-/g' $$FILE; \
+		sed -i.bak "s|SECURITY_PLACEHOLDER|$${SECURITY_LEVEL}|g" $$FILE; \
+		sed -i.bak 's/- Assignee (`assignee`) - suggest "assign to me" if not specified/- Assignee (`assignee`) - suggest "assign to me" if not specified (default: "'$$ASSIGNEE_EMAIL'")/g' $$FILE; \
+		rm $$FILE.bak; \
+		echo "$$FILE created successfully"; \
+	done
 	echo ""; \
 	echo "✅ Setup complete! Generated files:"; \
 	echo "  - CLAUDE.md (for Claude Code)"; \
@@ -67,3 +62,4 @@ clean:
 	@rm -f CLAUDE.md
 	@rm -f GEMINI.md
 	@echo "✅ Cleanup complete!"
+	
