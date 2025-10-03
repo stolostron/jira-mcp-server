@@ -153,24 +153,54 @@ This repository includes a specialized prompt file (`jira-assistant-prompt.md`) 
 - Or copy to `~/.claude/CLAUDE.md` for global access
 
 **Gemini CLI:**
-- Copy `jira-assistant-prompt.md` to `.gemini/prompt.md` in your project root
+- Copy `jira-assistant-prompt.md` to `GEMINI.md` in your project root
 - Or copy to `~/.gemini/prompt.md` for global access
 
 **Cursor:**
-- Copy `jira-assistant-prompt.md` to `.cursor/prompt.md` in your project root
-- Or copy to `~/.cursor/prompt.md` for global access
+- After running `make setup-prompts`, copy the contents from either `CLAUDE.md` or `GEMINI.md`
+- In Cursor, go to **Preferences > Cursor Settings > Rules & Memories > User Rules**
+- Paste the copied content into the User Rules section
 
-### Quick Setup
+### Automated Setup
+
+Use the interactive Makefile to automatically configure prompt files for your organization:
 
 ```bash
-# For Claude Code (project-specific)
+make setup-prompts
+```
+
+This will:
+1. **Ask for your Jira project key** (e.g., MYPROJ, DEV, ACME)
+2. **Ask for your default assignee email** (your email address)
+3. **Optionally set a security level** for your organization (e.g., "Company Employee", "Internal")
+4. **Generate customized prompt files**:
+   - `CLAUDE.md` (for Claude Code)
+   - `GEMINI.md` (for Gemini CLI)
+
+### Manual Setup (Alternative)
+
+If you prefer manual setup:
+
+```bash
+# For Claude Code
 cp jira-assistant-prompt.md CLAUDE.md
 
-# For Gemini CLI (project-specific)
-mkdir -p .gemini && cp jira-assistant-prompt.md .gemini/prompt.md
+# For Gemini CLI
+cp jira-assistant-prompt.md GEMINI.md
+```
 
-# For Cursor (project-specific)
-mkdir -p .cursor && cp jira-assistant-prompt.md .cursor/prompt.md
+Then manually edit the files to replace:
+- `"PROJ"` → your project key
+- `PROJ-` → your project prefix
+- `SECURITY_PLACEHOLDER` → your security level
+- Default assignee references
+
+### Cleaning Up
+
+To remove generated prompt files:
+
+```bash
+make clean
 ```
 
 ## Client Configuration
