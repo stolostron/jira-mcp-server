@@ -59,7 +59,6 @@ setup-prompts:
 # Clean up generated files
 clean:
 	@echo "Removing generated prompt files..."
-	@rm -f CLAUDE.md
-	@rm -f GEMINI.md
+	@rm -f CLAUDE.md GEMINI.md
 	@echo "✅ Cleanup complete!"
 	
