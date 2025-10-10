@@ -155,14 +155,14 @@ class JiraMCPServer:
         @self.mcp.tool()
         async def search_issues(
             jql: str,
-            max_results: Optional[int] = None,
+            max_results: int = 100,
             ctx: Optional[Context] = None
         ) -> List[IssueResponse]:
             """Search for Jira issues using JQL (Jira Query Language).
-            
+
             Args:
                 jql: JQL query string (e.g., 'project = PROJ AND status = Open')
-                max_results: Maximum number of results to return
+                max_results: Maximum number of results to return (default: 100)
                 ctx: MCP context for progress reporting
             """
             if ctx:
@@ -234,7 +234,14 @@ class JiraMCPServer:
                 assignee: Username of assignee
                 labels: List of labels to add
                 fix_versions: List of fix version names
-                work_type: Work type for the issue
+                work_type: Work type for the issue. Available options:
+                    - **None** = -1
+                    - **Associate Wellness & Development** = 46650
+                    - **Future Sustainability** = 48051
+                    - **Incident & Support** = 46651
+                    - **Quality / Stability / Reliability** = 46653
+                    - **Security & Compliance** = 46652
+                    - **Product / Portfolio Work** = 46654
                 security_level: Security level name
                 due_date: Due date in YYYY-MM-DD format
                 target_start: Target start date in YYYY-MM-DD format
@@ -329,7 +336,14 @@ class JiraMCPServer:
                 assignee: New assignee username
                 labels: New labels list
                 fix_versions: List of fix version names
-                work_type: Work type for the issue
+                work_type: Work type for the issue. Available options:
+                    - **None** = -1
+                    - **Associate Wellness & Development** = 46650
+                    - **Future Sustainability** = 48051
+                    - **Incident & Support** = 46651
+                    - **Quality / Stability / Reliability** = 46653
+                    - **Security & Compliance** = 46652
+                    - **Product / Portfolio Work** = 46654
                 security_level: Security level name
                 due_date: Due date in YYYY-MM-DD format
                 target_start: Target start date in YYYY-MM-DD format

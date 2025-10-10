@@ -142,66 +142,48 @@ The example client demonstrates:
 - Getting Jira projects
 - Searching for issues
 
-## AI Assistant Prompt Configuration
+## AI Assistant Configuration
 
-This repository includes a specialized prompt file (`jira-assistant-prompt.md`) that enhances AI assistants with Jira-specific knowledge and best practices. Copy this prompt to your preferred AI tool's configuration directory for optimal Jira MCP server integration.
+To optimize the Jira MCP server integration with AI assistants, create a simple configuration file that specifies your default Jira project and user information.
 
-### Prompt File Locations
+### Configuration Setup
+
+Create a configuration file in your AI assistant's expected location with just two lines:
+
+```
+Jira project = YOUR_PROJECT_KEY
+Jira assignee or reported = your.email@company.com
+```
+
+### File Locations by AI Assistant
 
 **Claude Code:**
-- Copy `jira-assistant-prompt.md` to `CLAUDE.md` in your project root
-- Or copy to `~/.claude/CLAUDE.md` for global access
+- Create `CLAUDE.md` in your project root, or
+- Create `~/.claude/CLAUDE.md` for global access
 
 **Gemini CLI:**
-- Copy `jira-assistant-prompt.md` to `GEMINI.md` in your project root
-- Or copy to `~/.gemini/prompt.md` for global access
+- Create `GEMINI.md` in your project root, or
+- Create `~/.gemini/GEMINI.md` for global access
 
 **Cursor:**
-- After running `make setup-prompts`, copy the contents from either `CLAUDE.md` or `GEMINI.md`
 - In Cursor, go to **Preferences > Cursor Settings > Rules & Memories > User Rules**
-- Paste the copied content into the User Rules section
+- Add the two-line configuration directly in the User Rules section
 
-### Automated Setup
+### Example Configuration
 
-Use the interactive Makefile to automatically configure prompt files for your organization:
-
-```bash
-make setup-prompts
+```
+Jira project = ACM
+Jira assignee or reported = john.doe@company.com
 ```
 
-This will:
-1. **Ask for your Jira project key** (e.g., MYPROJ, DEV, ACME)
-2. **Ask for your default assignee email** (your email address)
-3. **Optionally set a security level** for your organization (e.g., "Company Employee", "Internal")
-4. **Generate customized prompt files**:
-   - `CLAUDE.md` (for Claude Code)
-   - `GEMINI.md` (for Gemini CLI)
+This simple configuration allows the AI assistant to:
+- Default to your specified project when creating or searching issues
+- Automatically assign new issues to you when no assignee is specified
+- Use your email as the reporter for new issues
 
-### Manual Setup (Alternative)
+### Why This Works
 
-If you prefer manual setup:
-
-```bash
-# For Claude Code
-cp jira-assistant-prompt.md CLAUDE.md
-
-# For Gemini CLI
-cp jira-assistant-prompt.md GEMINI.md
-```
-
-Then manually edit the files to replace:
-- `"PROJ"` → your project key
-- `PROJ-` → your project prefix
-- `SECURITY_PLACEHOLDER` → your security level
-- Default assignee references
-
-### Cleaning Up
-
-To remove generated prompt files:
-
-```bash
-make clean
-```
+The AI assistant will automatically detect these settings and apply them as intelligent defaults when working with Jira issues, reducing the need to specify project keys and assignees repeatedly.
 
 ## Client Configuration
 

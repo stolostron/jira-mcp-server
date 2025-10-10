@@ -1,6 +1,11 @@
 .env
 .mcp.json
 .claude
+!.claude/commands/*.md
+.gemini
+!.gemini/commands/*.toml
+.cursor
+!.cursor/commands/*.md
 
 # Python
 __pycache__/
@@ -43,4 +48,3 @@ venv.bak/
 .DS_Store
 Thumbs.db
 CLAUDE.md
-GEMINI.md
