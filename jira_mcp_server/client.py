@@ -60,8 +60,9 @@ class JiraClient:
         """Search for issues using JQL."""
         if not self._jira:
             raise RuntimeError("Not connected to Jira")
-        
-        max_results = max_results or self.config.max_results
+
+        if max_results is None:
+            max_results = self.config.max_results
         
         try:
             issues = await self._async_call(
