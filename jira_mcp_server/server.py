@@ -352,11 +352,11 @@ class JiraMCPServer:
                 issue_key: Jira issue key (e.g., 'PROJ-123')
                 summary: New summary/title
                 description: New description
-                priority: New priority (required)
+                priority: New priority
                 assignee: New assignee username
                 labels: New labels list
                 fix_versions: List of fix version names
-                work_type: Work type for the issue (required). Available options:
+                work_type: Work type for the issue. Available options:
                     - **None** = -1
                     - **Associate Wellness & Development** = 46650
                     - **Future Sustainability** = 48051
@@ -365,10 +365,10 @@ class JiraMCPServer:
                     - **Security & Compliance** = 46652
                     - **Product / Portfolio Work** = 46654
                 security_level: Security level name
-                due_date: Due date in YYYY-MM-DD format (required)
+                due_date: Due date in YYYY-MM-DD format
                 target_start: Target start date in YYYY-MM-DD format
                 target_end: Target end date in YYYY-MM-DD format
-                components: List of component names (required)
+                components: List of component names
                 original_estimate: Original time estimate (e.g., '1h 30m')
                 story_points: Story points value
                 git_commit: Git commit hash or reference
