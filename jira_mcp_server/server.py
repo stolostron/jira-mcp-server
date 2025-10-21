@@ -205,36 +205,36 @@ class JiraMCPServer:
             project_key: str,
             summary: str,
             description: str,
+            priority: str,
+            work_type: str,
+            due_date: str,
+            components: List[str],
             issue_type: str = "Task",
-            priority: Optional[str] = None,
             assignee: Optional[str] = None,
             labels: Optional[List[str]] = None,
             fix_versions: Optional[List[str]] = None,
-            work_type: Optional[str] = None,
-            security_level: Optional[str] = None,
-            due_date: Optional[str] = None,
+            security_level: Optional[str] = "Red Hat Employee",
             target_start: Optional[str] = None,
             target_end: Optional[str] = None,
-            components: Optional[List[str]] = None,
-            original_estimate: Optional[str] = None,
-            story_points: Optional[float] = None,
+            original_estimate: Optional[str] = "1h",
+            story_points: Optional[float] = 1,
             git_commit: Optional[str] = None,
             git_pull_requests: Optional[str] = None,
             parent: Optional[str] = None,
             ctx: Optional[Context] = None
         ) -> IssueResponse:
             """Create a new Jira issue.
-            
+
             Args:
                 project_key: Project key (e.g., 'PROJ')
                 summary: Issue summary/title
                 description: Issue description
                 issue_type: Issue type (e.g., 'Bug', 'Task', 'Story', 'Sub-task')
-                priority: Issue priority
+                priority: Issue priority (required)
                 assignee: Username of assignee
                 labels: List of labels to add
                 fix_versions: List of fix version names
-                work_type: Work type for the issue. Available options:
+                work_type: Work type for the issue (required). Available options:
                     - **None** = -1
                     - **Associate Wellness & Development** = 46650
                     - **Future Sustainability** = 48051
@@ -243,10 +243,10 @@ class JiraMCPServer:
                     - **Security & Compliance** = 46652
                     - **Product / Portfolio Work** = 46654
                 security_level: Security level name
-                due_date: Due date in YYYY-MM-DD format
+                due_date: Due date in YYYY-MM-DD format (required)
                 target_start: Target start date in YYYY-MM-DD format
                 target_end: Target end date in YYYY-MM-DD format
-                components: List of component names
+                components: List of component names (required)
                 original_estimate: Original time estimate (e.g., '1h 30m')
                 story_points: Story points value
                 git_commit: Git commit hash or reference
@@ -254,6 +254,26 @@ class JiraMCPServer:
                 parent: Parent issue key for sub-tasks (e.g., 'PROJ-123')
                 ctx: MCP context for progress reporting
             """
+            # Validate required fields
+            if not summary or not summary.strip():
+                raise ValueError("Summary cannot be empty")
+            if not description or not description.strip():
+                raise ValueError("Description cannot be empty")
+            if not priority or not priority.strip():
+                raise ValueError("Priority cannot be empty")
+            if not work_type or not str(work_type).strip():
+                raise ValueError("Work type cannot be empty")
+            if not due_date or not due_date.strip():
+                raise ValueError("Due date cannot be empty")
+            if not components or len(components) == 0:
+                raise ValueError("Components cannot be empty")
+
+            # Validate optional fields if provided
+            if assignee is not None and (not assignee or not assignee.strip()):
+                raise ValueError("Assignee cannot be empty")
+            if fix_versions is not None and (not fix_versions or len(fix_versions) == 0):
+                raise ValueError("Fix versions cannot be empty")
+
             if ctx:
                 await ctx.info(f"Creating issue in project {project_key}")
             
@@ -308,18 +328,18 @@ class JiraMCPServer:
         @self.mcp.tool()
         async def update_issue(
             issue_key: str,
+            priority: str,
+            work_type: str,
+            due_date: str,
+            components: List[str],
             summary: Optional[str] = None,
             description: Optional[str] = None,
-            priority: Optional[str] = None,
             assignee: Optional[str] = None,
             labels: Optional[List[str]] = None,
             fix_versions: Optional[List[str]] = None,
-            work_type: Optional[str] = None,
             security_level: Optional[str] = None,
-            due_date: Optional[str] = None,
             target_start: Optional[str] = None,
             target_end: Optional[str] = None,
-            components: Optional[List[str]] = None,
             original_estimate: Optional[str] = None,
             story_points: Optional[float] = None,
             git_commit: Optional[str] = None,
@@ -332,11 +352,11 @@ class JiraMCPServer:
                 issue_key: Jira issue key (e.g., 'PROJ-123')
                 summary: New summary/title
                 description: New description
-                priority: New priority
+                priority: New priority (required)
                 assignee: New assignee username
                 labels: New labels list
                 fix_versions: List of fix version names
-                work_type: Work type for the issue. Available options:
+                work_type: Work type for the issue (required). Available options:
                     - **None** = -1
                     - **Associate Wellness & Development** = 46650
                     - **Future Sustainability** = 48051
@@ -345,10 +365,10 @@ class JiraMCPServer:
                     - **Security & Compliance** = 46652
                     - **Product / Portfolio Work** = 46654
                 security_level: Security level name
-                due_date: Due date in YYYY-MM-DD format
+                due_date: Due date in YYYY-MM-DD format (required)
                 target_start: Target start date in YYYY-MM-DD format
                 target_end: Target end date in YYYY-MM-DD format
-                components: List of component names
+                components: List of component names (required)
                 original_estimate: Original time estimate (e.g., '1h 30m')
                 story_points: Story points value
                 git_commit: Git commit hash or reference
