@@ -35,16 +35,32 @@ class JiraClient:
         self.throttler = Throttler(rate_limit=10, period=1.0)  # 10 requests per second
     
     async def connect(self) -> None:
-        """Connect to Jira server using personal access token authentication."""
+        """Connect to Jira server using appropriate authentication method.
+
+        For Jira Cloud (atlassian.net): Uses basic auth with email and API token
+        For self-hosted Jira: Uses personal access token authentication
+        """
         try:
-            self._jira = JIRA(
-                server=self.config.server_url,
-                token_auth=self.config.access_token,
-                options={
-                    'verify': self.config.verify_ssl,
-                    'timeout': self.config.timeout
-                }
-            )
+            options = {
+                'verify': self.config.verify_ssl,
+                'timeout': self.config.timeout
+            }
+
+            if self.config.is_cloud():
+                # Jira Cloud requires basic auth with email and API token
+                self._jira = JIRA(
+                    server=self.config.server_url,
+                    basic_auth=(self.config.email, self.config.access_token),
+                    options=options
+                )
+            else:
+                # Self-hosted Jira uses personal access token
+                self._jira = JIRA(
+                    server=self.config.server_url,
+                    token_auth=self.config.access_token,
+                    options=options
+                )
+
             # Test connection
             await self._async_call(lambda: self._jira.myself())
         except JIRAError as e:
