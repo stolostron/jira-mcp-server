@@ -138,6 +138,26 @@ class LinkTypeResponse(BaseModel):
     inward: str
     outward: str
 
+class WatcherResponse(BaseModel):
+    username: str
+    display_name: str
+    email: Optional[str]
+    active: bool
+
+class TeamAssignmentResponse(BaseModel):
+    issue_key: str
+    team_name: str
+    successes: List[str]
+    failures: List[Dict[str, str]]
+    total_added: int
+    total_failed: int
+
+class TeamInfoResponse(BaseModel):
+    teams: Dict[str, List[str]]
+
+class ComponentAliasResponse(BaseModel):
+    aliases: Dict[str, str]
+
 class JiraMCPServer:
     """MCP Server for Jira integration."""
     
@@ -179,6 +199,66 @@ class JiraMCPServer:
                 raise
         
         @self.mcp.tool()
+        async def search_issues_by_team(
+            team_name: str,
+            project_key: Optional[str] = None,
+            status: Optional[str] = None,
+            max_results: int = 100,
+            ctx: Optional[Context] = None
+        ) -> List[IssueResponse]:
+            """Search for issues assigned to any member of a team.
+            
+            This tool finds all issues where the assignee is one of the team members.
+            It automatically constructs the appropriate JQL query based on the team configuration.
+
+            Args:
+                team_name: Name of the team to search for
+                project_key: Optional project key to filter results (e.g., 'PROJ')
+                status: Optional status to filter results (e.g., 'Open', 'In Progress')
+                max_results: Maximum number of results to return (default: 100)
+                ctx: MCP context for progress reporting
+            """
+            if ctx:
+                await ctx.info(f"Searching issues assigned to team '{team_name}'")
+            
+            try:
+                # Get team members
+                team_members = self.config.get_team_members(team_name)
+                
+                if not team_members:
+                    raise ValueError(f"Team '{team_name}' has no members")
+                
+                # Build JQL query for assignee in team members
+                assignee_clause = " OR ".join([f'assignee = "{member}"' for member in team_members])
+                jql_parts = [f"({assignee_clause})"]
+                
+                # Add optional filters
+                if project_key:
+                    jql_parts.insert(0, f"project = {project_key}")
+                
+                if status:
+                    jql_parts.append(f'status = "{status}"')
+                
+                jql = " AND ".join(jql_parts)
+                
+                if ctx:
+                    await ctx.info(f"Generated JQL: {jql}")
+                    await ctx.info(f"Searching for issues assigned to: {', '.join(team_members)}")
+                
+                # Execute search
+                issues = await self.client.search_issues(jql, max_results)
+                
+                if ctx:
+                    await ctx.info(f"Found {len(issues)} issues assigned to team '{team_name}'")
+                
+                return [IssueResponse(**issue) for issue in issues]
+                
+            except Exception as e:
+                if ctx:
+                    await ctx.error(f"Failed to search issues for team '{team_name}': {str(e)}")
+                raise
+        
+        @self.mcp.tool()
         async def get_issue(
             issue_key: str,
             ctx: Optional[Context] = None
@@ -211,6 +291,7 @@ class JiraMCPServer:
             components: List[str],
             issue_type: str = "Task",
             assignee: Optional[str] = None,
+            team: Optional[str] = None,
             labels: Optional[List[str]] = None,
             fix_versions: Optional[List[str]] = None,
             security_level: Optional[str] = "Red Hat Employee",
@@ -221,6 +302,7 @@ class JiraMCPServer:
             git_commit: Optional[str] = None,
             git_pull_requests: Optional[str] = None,
             parent: Optional[str] = None,
+            epic_name: Optional[str] = None,
             ctx: Optional[Context] = None
         ) -> IssueResponse:
             """Create a new Jira issue.
@@ -232,6 +314,7 @@ class JiraMCPServer:
                 issue_type: Issue type (e.g., 'Bug', 'Task', 'Story', 'Sub-task')
                 priority: Issue priority (required)
                 assignee: Username of assignee
+                team: Team name to add as watchers (all team members will be added as watchers)
                 labels: List of labels to add
                 fix_versions: List of fix version names
                 work_type: Work type for the issue (required). Available options:
@@ -252,6 +335,7 @@ class JiraMCPServer:
                 git_commit: Git commit hash or reference
                 git_pull_requests: Git pull requests, comma separated list of pull requests URLs
                 parent: Parent issue key for sub-tasks (e.g., 'PROJ-123')
+                epic_name: Epic Name (required for Epic issue type)
                 ctx: MCP context for progress reporting
             """
             # Validate required fields
@@ -299,8 +383,10 @@ class JiraMCPServer:
             if target_end:
                 fields['customfield_12313942'] = target_end  # Target End custom field
             if components:
+                # Resolve component aliases to actual component names
+                resolved_components = self.config.resolve_component_names(components)
                 # Components need to be converted to objects with 'name' property
-                fields['components'] = [{'name': component} for component in components]
+                fields['components'] = [{'name': component} for component in resolved_components]
             if original_estimate:
                 fields['timetracking'] = {'originalEstimate': original_estimate}
             if story_points:
@@ -312,6 +398,8 @@ class JiraMCPServer:
                 fields['customfield_12310220'] = git_pull_requests  # Git Pull Requests custom field
             if parent:
                 fields['parent'] = {'key': parent}  # Parent issue for sub-tasks
+            if epic_name:
+                fields['customfield_12311141'] = epic_name  # Epic Name custom field
             
             try:
                 issue = await self.client.create_issue(
@@ -319,6 +407,18 @@ class JiraMCPServer:
                 )
                 if ctx:
                     await ctx.info(f"Created issue: {issue['key']}")
+                
+                # If a team is specified, add team members as watchers
+                if team:
+                    try:
+                        team_members = self.config.get_team_members(team)
+                        if ctx:
+                            await ctx.info(f"Adding {len(team_members)} team members as watchers")
+                        await self.client.add_team_as_watchers(issue['key'], team_members)
+                    except Exception as team_error:
+                        if ctx:
+                            await ctx.warning(f"Failed to add team watchers: {str(team_error)}")
+                
                 return IssueResponse(**issue)
             except Exception as e:
                 if ctx:
@@ -404,8 +504,10 @@ class JiraMCPServer:
             if target_end:
                 fields['customfield_12313942'] = target_end  # Target End custom field
             if components:
+                # Resolve component aliases to actual component names
+                resolved_components = self.config.resolve_component_names(components)
                 # Components need to be converted to objects with 'name' property
-                fields['components'] = [{'name': component} for component in components]
+                fields['components'] = [{'name': component} for component in resolved_components]
             if original_estimate:
                 fields['timetracking'] = {'originalEstimate': original_estimate}
             if story_points:
@@ -635,6 +737,262 @@ class JiraMCPServer:
             except Exception as e:
                 if ctx:
                     await ctx.error(f"Failed to get raw fields for {issue_key}: {str(e)}")
+                raise
+        
+        @self.mcp.tool()
+        async def assign_team_to_issue(
+            issue_key: str,
+            team_name: str,
+            ctx: Optional[Context] = None
+        ) -> TeamAssignmentResponse:
+            """Assign a team to an issue by adding all team members as watchers.
+            
+            Args:
+                issue_key: Jira issue key (e.g., 'PROJ-123')
+                team_name: Name of the team to assign
+                ctx: MCP context for progress reporting
+            """
+            if ctx:
+                await ctx.info(f"Assigning team '{team_name}' to issue: {issue_key}")
+            
+            try:
+                team_members = self.config.get_team_members(team_name)
+                result = await self.client.add_team_as_watchers(issue_key, team_members)
+                
+                if ctx:
+                    await ctx.info(f"Added {result['total_added']} watchers, {result['total_failed']} failed")
+                
+                return TeamAssignmentResponse(
+                    issue_key=result['issue_key'],
+                    team_name=team_name,
+                    successes=result['successes'],
+                    failures=result['failures'],
+                    total_added=result['total_added'],
+                    total_failed=result['total_failed']
+                )
+            except Exception as e:
+                if ctx:
+                    await ctx.error(f"Failed to assign team to {issue_key}: {str(e)}")
+                raise
+        
+        @self.mcp.tool()
+        async def add_watcher_to_issue(
+            issue_key: str,
+            username: str,
+            ctx: Optional[Context] = None
+        ) -> Dict[str, Any]:
+            """Add a watcher to an issue.
+            
+            Args:
+                issue_key: Jira issue key (e.g., 'PROJ-123')
+                username: Username of the user to add as watcher
+                ctx: MCP context for progress reporting
+            """
+            if ctx:
+                await ctx.info(f"Adding watcher {username} to issue: {issue_key}")
+            
+            try:
+                result = await self.client.add_watcher(issue_key, username)
+                if ctx:
+                    await ctx.info(f"Successfully added watcher {username}")
+                return result
+            except Exception as e:
+                if ctx:
+                    await ctx.error(f"Failed to add watcher: {str(e)}")
+                raise
+        
+        @self.mcp.tool()
+        async def remove_watcher_from_issue(
+            issue_key: str,
+            username: str,
+            ctx: Optional[Context] = None
+        ) -> Dict[str, Any]:
+            """Remove a watcher from an issue.
+            
+            Args:
+                issue_key: Jira issue key (e.g., 'PROJ-123')
+                username: Username of the user to remove as watcher
+                ctx: MCP context for progress reporting
+            """
+            if ctx:
+                await ctx.info(f"Removing watcher {username} from issue: {issue_key}")
+            
+            try:
+                result = await self.client.remove_watcher(issue_key, username)
+                if ctx:
+                    await ctx.info(f"Successfully removed watcher {username}")
+                return result
+            except Exception as e:
+                if ctx:
+                    await ctx.error(f"Failed to remove watcher: {str(e)}")
+                raise
+        
+        @self.mcp.tool()
+        async def get_issue_watchers(
+            issue_key: str,
+            ctx: Optional[Context] = None
+        ) -> List[WatcherResponse]:
+            """Get all watchers for an issue.
+            
+            Args:
+                issue_key: Jira issue key (e.g., 'PROJ-123')
+                ctx: MCP context for progress reporting
+            """
+            if ctx:
+                await ctx.info(f"Getting watchers for issue: {issue_key}")
+            
+            try:
+                watchers = await self.client.get_watchers(issue_key)
+                if ctx:
+                    await ctx.info(f"Found {len(watchers)} watchers")
+                return [WatcherResponse(**watcher) for watcher in watchers]
+            except Exception as e:
+                if ctx:
+                    await ctx.error(f"Failed to get watchers: {str(e)}")
+                raise
+        
+        @self.mcp.tool()
+        async def list_teams(
+            ctx: Optional[Context] = None
+        ) -> TeamInfoResponse:
+            """List all configured teams and their members.
+            
+            Args:
+                ctx: MCP context for progress reporting
+            """
+            if ctx:
+                await ctx.info("Listing all teams")
+            
+            try:
+                teams = self.config.list_teams()
+                if ctx:
+                    await ctx.info(f"Found {len(teams)} teams")
+                return TeamInfoResponse(teams=teams)
+            except Exception as e:
+                if ctx:
+                    await ctx.error(f"Failed to list teams: {str(e)}")
+                raise
+        
+        @self.mcp.tool()
+        async def add_team(
+            team_name: str,
+            members: List[str],
+            ctx: Optional[Context] = None
+        ) -> TeamInfoResponse:
+            """Add or update a team configuration.
+            
+            Args:
+                team_name: Name of the team
+                members: List of member usernames
+                ctx: MCP context for progress reporting
+            """
+            if ctx:
+                await ctx.info(f"Adding/updating team '{team_name}' with {len(members)} members")
+            
+            try:
+                self.config.add_team(team_name, members)
+                if ctx:
+                    await ctx.info(f"Successfully added/updated team '{team_name}'")
+                return TeamInfoResponse(teams=self.config.list_teams())
+            except Exception as e:
+                if ctx:
+                    await ctx.error(f"Failed to add team: {str(e)}")
+                raise
+        
+        @self.mcp.tool()
+        async def remove_team(
+            team_name: str,
+            ctx: Optional[Context] = None
+        ) -> TeamInfoResponse:
+            """Remove a team configuration.
+            
+            Args:
+                team_name: Name of the team to remove
+                ctx: MCP context for progress reporting
+            """
+            if ctx:
+                await ctx.info(f"Removing team '{team_name}'")
+            
+            try:
+                self.config.remove_team(team_name)
+                if ctx:
+                    await ctx.info(f"Successfully removed team '{team_name}'")
+                return TeamInfoResponse(teams=self.config.list_teams())
+            except Exception as e:
+                if ctx:
+                    await ctx.error(f"Failed to remove team: {str(e)}")
+                raise
+        
+        @self.mcp.tool()
+        async def list_component_aliases(
+            ctx: Optional[Context] = None
+        ) -> ComponentAliasResponse:
+            """List all configured component aliases.
+            
+            Args:
+                ctx: MCP context for progress reporting
+            """
+            if ctx:
+                await ctx.info("Listing all component aliases")
+            
+            try:
+                aliases = self.config.list_component_aliases()
+                if ctx:
+                    await ctx.info(f"Found {len(aliases)} component aliases")
+                return ComponentAliasResponse(aliases=aliases)
+            except Exception as e:
+                if ctx:
+                    await ctx.error(f"Failed to list component aliases: {str(e)}")
+                raise
+        
+        @self.mcp.tool()
+        async def add_component_alias(
+            alias: str,
+            component_name: str,
+            ctx: Optional[Context] = None
+        ) -> ComponentAliasResponse:
+            """Add or update a component alias configuration.
+            
+            Args:
+                alias: Short alias for the component (e.g., 'ui', 'be', 'infra')
+                component_name: Actual component name in Jira (e.g., 'User Interface', 'Backend Services')
+                ctx: MCP context for progress reporting
+            """
+            if ctx:
+                await ctx.info(f"Adding/updating component alias '{alias}' -> '{component_name}'")
+            
+            try:
+                self.config.add_component_alias(alias, component_name)
+                if ctx:
+                    await ctx.info(f"Successfully added/updated component alias '{alias}'")
+                return ComponentAliasResponse(aliases=self.config.list_component_aliases())
+            except Exception as e:
+                if ctx:
+                    await ctx.error(f"Failed to add component alias: {str(e)}")
+                raise
+        
+        @self.mcp.tool()
+        async def remove_component_alias(
+            alias: str,
+            ctx: Optional[Context] = None
+        ) -> ComponentAliasResponse:
+            """Remove a component alias configuration.
+            
+            Args:
+                alias: Alias to remove
+                ctx: MCP context for progress reporting
+            """
+            if ctx:
+                await ctx.info(f"Removing component alias '{alias}'")
+            
+            try:
+                self.config.remove_component_alias(alias)
+                if ctx:
+                    await ctx.info(f"Successfully removed component alias '{alias}'")
+                return ComponentAliasResponse(aliases=self.config.list_component_aliases())
+            except Exception as e:
+                if ctx:
+                    await ctx.error(f"Failed to remove component alias: {str(e)}")
                 raise
     
     def _setup_resources(self) -> None:
