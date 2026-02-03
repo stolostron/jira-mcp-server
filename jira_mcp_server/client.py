@@ -460,6 +460,116 @@ class JiraClient:
         except JIRAError as e:
             raise ValueError(f"Failed to get raw fields for issue {issue_key}: {e}")
     
+    async def add_watcher(self, issue_key: str, username: str) -> Dict[str, Any]:
+        """Add a watcher to an issue.
+        
+        Args:
+            issue_key: Jira issue key (e.g., 'PROJ-123')
+            username: Username of the user to add as watcher
+            
+        Returns:
+            Dict containing watcher information
+        """
+        if not self._jira:
+            raise RuntimeError("Not connected to Jira")
+        
+        try:
+            issue = await self._async_call(lambda: self._jira.issue(issue_key))
+            await self._async_call(lambda: self._jira.add_watcher(issue, username))
+            
+            return {
+                'issue_key': issue_key,
+                'watcher': username,
+                'added': True
+            }
+        except JIRAError as e:
+            raise ValueError(f"Failed to add watcher {username} to {issue_key}: {e}")
+    
+    async def remove_watcher(self, issue_key: str, username: str) -> Dict[str, Any]:
+        """Remove a watcher from an issue.
+        
+        Args:
+            issue_key: Jira issue key (e.g., 'PROJ-123')
+            username: Username of the user to remove as watcher
+            
+        Returns:
+            Dict containing watcher information
+        """
+        if not self._jira:
+            raise RuntimeError("Not connected to Jira")
+        
+        try:
+            issue = await self._async_call(lambda: self._jira.issue(issue_key))
+            await self._async_call(lambda: self._jira.remove_watcher(issue, username))
+            
+            return {
+                'issue_key': issue_key,
+                'watcher': username,
+                'removed': True
+            }
+        except JIRAError as e:
+            raise ValueError(f"Failed to remove watcher {username} from {issue_key}: {e}")
+    
+    async def get_watchers(self, issue_key: str) -> List[Dict[str, Any]]:
+        """Get all watchers for an issue.
+        
+        Args:
+            issue_key: Jira issue key (e.g., 'PROJ-123')
+            
+        Returns:
+            List of watchers with their information
+        """
+        if not self._jira:
+            raise RuntimeError("Not connected to Jira")
+        
+        try:
+            watchers_obj = await self._async_call(
+                lambda: self._jira.watchers(issue_key)
+            )
+            
+            return [
+                {
+                    'username': watcher.name,
+                    'display_name': watcher.displayName,
+                    'email': getattr(watcher, 'emailAddress', None),
+                    'active': getattr(watcher, 'active', True)
+                }
+                for watcher in watchers_obj.watchers
+            ]
+        except JIRAError as e:
+            raise ValueError(f"Failed to get watchers for {issue_key}: {e}")
+    
+    async def add_team_as_watchers(self, issue_key: str, team_members: List[str]) -> Dict[str, Any]:
+        """Add multiple team members as watchers to an issue.
+        
+        Args:
+            issue_key: Jira issue key (e.g., 'PROJ-123')
+            team_members: List of usernames to add as watchers
+            
+        Returns:
+            Dict containing success and failure information
+        """
+        if not self._jira:
+            raise RuntimeError("Not connected to Jira")
+        
+        successes = []
+        failures = []
+        
+        for username in team_members:
+            try:
+                await self.add_watcher(issue_key, username)
+                successes.append(username)
+            except Exception as e:
+                failures.append({'username': username, 'error': str(e)})
+        
+        return {
+            'issue_key': issue_key,
+            'successes': successes,
+            'failures': failures,
+            'total_added': len(successes),
+            'total_failed': len(failures)
+        }
+    
     def _extract_custom_field_value(self, field_value):
         """Extract string value from custom field that might be a CustomFieldOption object."""
         if field_value is None:

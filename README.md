@@ -18,6 +18,9 @@ A Model Context Protocol (MCP) server that provides seamless integration with Ji
 ## Features
 
 - **Issue Management**: Search, create, update, and transition Jira issues
+- **Team Management**: Define teams with multiple members and assign them to issues as watchers
+- **Component Aliases**: Use short, memorable aliases instead of long component names
+- **Watcher Management**: Add, remove, and list watchers on issues
 - **Issue Linking**: Create links between issues with different relationship types (blocks, relates to, etc.)
 - **Project Access**: List and browse Jira projects and components
 - **User Search**: Find Jira users by name, email, or username for assignment
@@ -63,7 +66,15 @@ JIRA_ACCESS_TOKEN=your-personal-access-token
 JIRA_VERIFY_SSL=true
 JIRA_TIMEOUT=30
 JIRA_MAX_RESULTS=100
+
+# Optional: Configure teams (JSON format with usernames, NOT email addresses)
+JIRA_TEAMS={"frontend": ["alice", "bob"], "backend": ["charlie", "david"], "devops": ["eve"]}
+
+# Optional: Configure component aliases (JSON format mapping aliases to actual component names)
+JIRA_COMPONENT_ALIASES={"ui": "User Interface", "be": "Backend Services", "infra": "Infrastructure"}
 ```
+
+**Note:** Team member names must be Jira usernames, not email addresses.
 
 ### Jira Cloud Setup
 
@@ -245,6 +256,12 @@ Once connected, you can ask Claude:
 - "Log 2 hours of work on issue PROJ-123 for debugging the login bug"
 - "Link issue PROJ-123 to PROJ-456 with a 'blocks' relationship"
 - "Show me all available link types for this Jira instance"
+- "Assign the frontend team to issue PROJ-123"
+- "Create a new issue and assign it to the backend team"
+- "Who is watching issue PROJ-123?"
+- "Add alice as a watcher to issue PROJ-456"
+- **"Find all issues assigned to the frontend team"**
+- **"Show me open issues assigned to the backend team"**
 
 ### Gemini CLI
 
@@ -335,6 +352,21 @@ Search for issues using JQL (Jira Query Language):
 "project = MYPROJ AND status = Open"
 "assignee = currentUser() AND priority = High"
 "created >= -7d AND project in (PROJ1, PROJ2)"
+```
+
+### `search_issues_by_team`
+Search for issues assigned to any member of a team:
+```python
+search_issues_by_team(
+    team_name="frontend",
+    project_key="PROJ",  # Optional
+    status="In Progress"  # Optional
+)
+```
+
+This automatically generates a JQL query like:
+```
+project = PROJ AND (assignee = "alice" OR assignee = "bob") AND status = "In Progress"
 ```
 
 ### `get_issue`
@@ -439,6 +471,99 @@ Returns matching users with their account_id, name, display_name, email_address,
 Get all raw Jira fields for an issue (useful for debugging custom fields):
 ```python
 debug_issue_fields(issue_key="PROJ-123")
+```
+
+### Team Management Tools
+
+#### `list_teams`
+List all configured teams and their members:
+```python
+list_teams()
+```
+
+#### `add_team`
+Add or update a team configuration:
+```python
+add_team(
+    team_name="frontend",
+    members=["alice", "bob", "charlie"]
+)
+```
+
+#### `remove_team`
+Remove a team configuration:
+```python
+remove_team(team_name="frontend")
+```
+
+#### `assign_team_to_issue`
+Assign a team to an issue by adding all team members as watchers:
+```python
+assign_team_to_issue(
+    issue_key="PROJ-123",
+    team_name="frontend"
+)
+```
+
+Note: When creating issues, you can also use the `team` parameter to automatically add team members as watchers:
+```python
+create_issue(
+    project_key="PROJ",
+    summary="Fix login bug",
+    description="Users cannot log in",
+    issue_type="Bug",
+    priority="High",
+    team="frontend"  # All frontend team members will be added as watchers
+)
+```
+
+### Watcher Management Tools
+
+#### `get_issue_watchers`
+Get all watchers for an issue:
+```python
+get_issue_watchers(issue_key="PROJ-123")
+```
+
+#### `add_watcher_to_issue`
+Add a single watcher to an issue:
+```python
+add_watcher_to_issue(
+    issue_key="PROJ-123",
+    username="alice"
+)
+```
+
+#### `remove_watcher_from_issue`
+Remove a watcher from an issue:
+```python
+remove_watcher_from_issue(
+    issue_key="PROJ-123",
+    username="alice"
+)
+```
+
+### Component Alias Management Tools
+
+#### `list_component_aliases`
+List all configured component aliases:
+```python
+list_component_aliases()
+```
+
+#### `add_component_alias`
+Add or update a component alias:
+```python
+add_component_alias(
+    alias="ui",
+    component_name="User Interface"
+)
+```
+
+#### `remove_component_alias`
+Remove a component alias:
+```python
+remove_component_alias(alias="ui")
 ```
 
 ### Available Resources
@@ -565,7 +690,149 @@ You can override any configuration by setting environment variables:
 export JIRA_SERVER_URL="https://custom-jira.company.com"
 export JIRA_TIMEOUT="60"
 export JIRA_MAX_RESULTS="200"
+export JIRA_TEAMS='{"frontend": ["alice", "bob"], "backend": ["charlie"]}'
+export JIRA_COMPONENT_ALIASES='{"ui": "User Interface", "be": "Backend Services", "infra": "Infrastructure"}'
 ```
+
+### Team Configuration
+
+Teams can be configured in two ways:
+
+#### 1. Environment Variable (Static)
+
+Set the `JIRA_TEAMS` environment variable in your `.env` file:
+
+```env
+JIRA_TEAMS={"frontend": ["alice", "bob"], "backend": ["charlie", "david"]}
+```
+
+#### 2. Dynamic Configuration (Runtime)
+
+Use the MCP tools to manage teams dynamically:
+
+```python
+# Add a new team
+add_team(team_name="devops", members=["eve", "frank"])
+
+# Update an existing team
+add_team(team_name="frontend", members=["alice", "bob", "grace"])
+
+# Remove a team
+remove_team(team_name="legacy-team")
+
+# List all teams
+list_teams()
+```
+
+#### Using Teams
+
+Once teams are configured, you can:
+
+1. **Assign teams when creating issues**:
+```python
+create_issue(
+    project_key="PROJ",
+    summary="New feature",
+    description="Implement new login flow",
+    team="frontend"  # All frontend members become watchers
+)
+```
+
+2. **Assign teams to existing issues**:
+```python
+assign_team_to_issue(
+    issue_key="PROJ-123",
+    team_name="backend"
+)
+```
+
+3. **Check who's watching**:
+```python
+get_issue_watchers(issue_key="PROJ-123")
+```
+
+#### Team Benefits
+
+- **Visibility**: All team members are automatically notified of issue updates
+- **Collaboration**: Ensures the whole team stays informed
+- **Flexibility**: Teams can be configured per environment or project
+- **Scalability**: Easily manage large teams without adding watchers one by one
+
+### Component Alias Configuration
+
+Component aliases allow you to use short, memorable names instead of long component names when creating or updating Jira issues. This is especially useful when component names are lengthy or difficult to remember.
+
+#### 1. Environment Variable (Static)
+
+Set the `JIRA_COMPONENT_ALIASES` environment variable in your `.env` file:
+
+```env
+JIRA_COMPONENT_ALIASES={"ui": "User Interface", "be": "Backend Services", "infra": "Infrastructure", "db": "Database"}
+```
+
+#### 2. Dynamic Configuration (Runtime)
+
+Use the MCP tools to manage component aliases dynamically:
+
+```python
+# Add a new component alias
+add_component_alias(alias="ui", component_name="User Interface")
+
+# Update an existing alias
+add_component_alias(alias="ui", component_name="User Interface v2")
+
+# Remove an alias
+remove_component_alias(alias="legacy")
+
+# List all component aliases
+list_component_aliases()
+```
+
+#### Using Component Aliases
+
+Once configured, you can use aliases anywhere you would use component names:
+
+1. **Creating issues with component aliases**:
+```python
+create_issue(
+    project_key="PROJ",
+    summary="Fix UI bug",
+    description="Button is not clickable",
+    issue_type="Bug",
+    priority="High",
+    components=["ui", "be"]  # Will resolve to ["User Interface", "Backend Services"]
+)
+```
+
+2. **Updating issues with component aliases**:
+```python
+update_issue(
+    issue_key="PROJ-123",
+    components=["ui", "db"]  # Mix of aliases
+)
+```
+
+3. **Mixing aliases with actual component names**:
+```python
+create_issue(
+    project_key="PROJ",
+    summary="Database optimization",
+    description="Optimize queries",
+    issue_type="Task",
+    priority="Medium",
+    components=["db", "Performance Testing"]  # Alias + actual name
+)
+```
+
+#### Component Alias Benefits
+
+- **Convenience**: Use short aliases instead of typing long component names
+- **Consistency**: Standardize component naming across your team
+- **Flexibility**: Mix aliases with actual component names as needed
+- **Error Reduction**: Reduce typos when specifying component names
+- **Efficiency**: Speed up issue creation and updates
+
+**Note:** Component aliases are case-sensitive. If a component name isn't found in the alias mapping, it will be used as-is (assumed to be the actual component name).
 
 ### Multiple Jira Instances
 
