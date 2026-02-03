@@ -373,6 +373,37 @@ class JiraClient:
         except JIRAError as e:
             raise ValueError(f"Failed to get issue link types: {e}")
 
+    async def search_users(self, query: str, max_results: int = 50) -> List[Dict[str, Any]]:
+        """Search for Jira users by name or email.
+
+        Args:
+            query: Search query (name, email, or username - supports fuzzy matching)
+            max_results: Maximum number of results to return (default: 50)
+
+        Returns:
+            List of user dictionaries with key, name, displayName, and emailAddress
+        """
+        if not self._jira:
+            raise RuntimeError("Not connected to Jira")
+
+        try:
+            users = await self._async_call(
+                lambda: self._jira.search_users(query, maxResults=max_results)
+            )
+
+            return [
+                {
+                    'account_id': getattr(user, 'accountId', None),
+                    'name': getattr(user, 'name', None),
+                    'display_name': getattr(user, 'displayName', ''),
+                    'email_address': getattr(user, 'emailAddress', None),
+                    'active': getattr(user, 'active', True)
+                }
+                for user in users
+            ]
+        except JIRAError as e:
+            raise ValueError(f"Failed to search users: {e}")
+
     async def get_raw_issue_fields(self, issue_key: str) -> Dict[str, Any]:
         """Get all raw fields from a Jira issue for debugging purposes."""
         if not self._jira:
@@ -562,6 +593,7 @@ class JiraClient:
             ],
             'url': f"{self.config.server_url}/browse/{issue.key}",
             'fix_versions': [version.name for version in getattr(issue.fields, 'fixVersions', [])],
+            'target_version': [v.name for v in getattr(issue.fields, 'customfield_12319940', []) or []],  # Target Version custom field
             'work_type': self._extract_custom_field_value(getattr(issue.fields, 'customfield_12320040', None)),  # Work type custom field
             'security_level': getattr(issue.fields.security, 'name', None) if getattr(issue.fields, 'security', None) else None,
             'due_date': getattr(issue.fields, 'duedate', None),
