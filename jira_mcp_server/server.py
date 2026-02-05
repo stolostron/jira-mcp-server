@@ -31,6 +31,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+# Statuses that do NOT require fix_version to be set
+# Any status not in this set will require fix_version before transitioning
+EARLY_STATUSES = {'new', 'backlog', 'in progress'}
+
+
 def _validate_git_commit_sha(sha: str) -> None:
     """Validate that a git commit SHA is either 40 characters (SHA-1) or 64 characters (SHA-256).
 
@@ -82,6 +87,7 @@ class IssueResponse(BaseModel):
     comments: List["CommentResponse"]
     url: str
     fix_versions: List[str]
+    target_version: List[str]
     work_type: Optional[str]
     security_level: Optional[str]
     due_date: Optional[str]
@@ -138,6 +144,13 @@ class LinkTypeResponse(BaseModel):
     inward: str
     outward: str
 
+class UserResponse(BaseModel):
+    account_id: Optional[str]
+    name: Optional[str]
+    display_name: str
+    email_address: Optional[str]
+    active: bool
+
 class WatcherResponse(BaseModel):
     username: str
     display_name: str
@@ -157,7 +170,6 @@ class TeamInfoResponse(BaseModel):
 
 class ComponentAliasResponse(BaseModel):
     aliases: Dict[str, str]
-
 class JiraMCPServer:
     """MCP Server for Jira integration."""
     
@@ -287,9 +299,10 @@ class JiraMCPServer:
             description: str,
             priority: str,
             work_type: str,
-            due_date: str,
             components: List[str],
+            target_version: Optional[List[str]] = None,
             issue_type: str = "Task",
+            due_date: Optional[str] = None,
             assignee: Optional[str] = None,
             team: Optional[str] = None,
             labels: Optional[List[str]] = None,
@@ -316,7 +329,8 @@ class JiraMCPServer:
                 assignee: Username of assignee
                 team: Team name to add as watchers (all team members will be added as watchers)
                 labels: List of labels to add
-                fix_versions: List of fix version names
+                fix_versions: List of fix version names (set when issue is closed)
+                target_version: List of target version names (set when issue is created)
                 work_type: Work type for the issue (required). Available options:
                     - **None** = -1
                     - **Associate Wellness & Development** = 46650
@@ -326,7 +340,7 @@ class JiraMCPServer:
                     - **Security & Compliance** = 46652
                     - **Product / Portfolio Work** = 46654
                 security_level: Security level name
-                due_date: Due date in YYYY-MM-DD format (required)
+                due_date: Due date in YYYY-MM-DD format
                 target_start: Target start date in YYYY-MM-DD format
                 target_end: Target end date in YYYY-MM-DD format
                 components: List of component names (required)
@@ -347,8 +361,6 @@ class JiraMCPServer:
                 raise ValueError("Priority cannot be empty")
             if not work_type or not str(work_type).strip():
                 raise ValueError("Work type cannot be empty")
-            if not due_date or not due_date.strip():
-                raise ValueError("Due date cannot be empty")
             if not components or len(components) == 0:
                 raise ValueError("Components cannot be empty")
 
@@ -360,7 +372,7 @@ class JiraMCPServer:
 
             if ctx:
                 await ctx.info(f"Creating issue in project {project_key}")
-            
+
             fields = {}
             if priority:
                 fields['priority'] = {'name': priority}
@@ -372,6 +384,9 @@ class JiraMCPServer:
             if fix_versions:
                 # Fix versions need to be converted to objects with 'name' property
                 fields['fixVersions'] = [{'name': version} for version in fix_versions]
+            if target_version:
+                # Target versions need to be converted to objects with 'name' property
+                fields['customfield_12319940'] = [{'name': version} for version in target_version]
             if work_type:
                 fields['customfield_12320040'] = {'id': str(work_type)}  # Work type custom field
             if security_level:
@@ -430,13 +445,14 @@ class JiraMCPServer:
             issue_key: str,
             priority: str,
             work_type: str,
-            due_date: str,
             components: List[str],
+            due_date: Optional[str] = None,
             summary: Optional[str] = None,
             description: Optional[str] = None,
             assignee: Optional[str] = None,
             labels: Optional[List[str]] = None,
             fix_versions: Optional[List[str]] = None,
+            target_version: Optional[List[str]] = None,
             security_level: Optional[str] = None,
             target_start: Optional[str] = None,
             target_end: Optional[str] = None,
@@ -455,7 +471,8 @@ class JiraMCPServer:
                 priority: New priority
                 assignee: New assignee username
                 labels: New labels list
-                fix_versions: List of fix version names
+                fix_versions: List of fix version names (set when issue is closed)
+                target_version: List of target version names (set when issue is created)
                 work_type: Work type for the issue. Available options:
                     - **None** = -1
                     - **Associate Wellness & Development** = 46650
@@ -493,6 +510,9 @@ class JiraMCPServer:
             if fix_versions:
                 # Fix versions need to be converted to objects with 'name' property
                 fields['fixVersions'] = [{'name': version} for version in fix_versions]
+            if target_version:
+                # Target versions need to be converted to objects with 'name' property
+                fields['customfield_12319940'] = [{'name': version} for version in target_version]
             if work_type:
                 fields['customfield_12320040'] = {'id': str(work_type)}  # Work type custom field
             if security_level:
@@ -535,16 +555,32 @@ class JiraMCPServer:
             ctx: Optional[Context] = None
         ) -> IssueResponse:
             """Transition a Jira issue to a new status.
-            
+
             Args:
                 issue_key: Jira issue key (e.g., 'PROJ-123')
                 transition: Transition name (e.g., 'Done', 'In Progress')
                 ctx: MCP context for progress reporting
+
+            Note:
+                Transitions to statuses beyond 'New', 'Backlog', and 'In Progress'
+                require fix_version to be set on the issue.
             """
             if ctx:
                 await ctx.info(f"Transitioning issue {issue_key} to {transition}")
-            
+
             try:
+                # Check if target status requires fix_version
+                if transition.lower() not in EARLY_STATUSES:
+                    # Fetch issue to check fix_versions
+                    current_issue = await self.client.get_issue(issue_key)
+                    fix_versions = current_issue.get('fix_versions', [])
+                    if not fix_versions:
+                        raise ValueError(
+                            f"Cannot transition {issue_key} to '{transition}': "
+                            f"fix_version must be set before moving beyond 'In Progress'. "
+                            f"Please update the issue with a fix_version first."
+                        )
+
                 issue = await self.client.transition_issue(issue_key, transition)
                 if ctx:
                     await ctx.info(f"Transitioned issue {issue_key} to {transition}")
@@ -721,14 +757,14 @@ class JiraMCPServer:
             ctx: Optional[Context] = None
         ) -> Dict[str, Any]:
             """Debug function to show all raw Jira fields for an issue.
-            
+
             Args:
                 issue_key: Jira issue key (e.g., 'PROJ-123')
                 ctx: MCP context for progress reporting
             """
             if ctx:
                 await ctx.info(f"Debugging raw fields for issue: {issue_key}")
-            
+
             try:
                 raw_issue = await self.client.get_raw_issue_fields(issue_key)
                 if ctx:
@@ -737,6 +773,42 @@ class JiraMCPServer:
             except Exception as e:
                 if ctx:
                     await ctx.error(f"Failed to get raw fields for {issue_key}: {str(e)}")
+                raise
+
+        @self.mcp.tool()
+        async def search_users(
+            query: str,
+            max_results: int = 50,
+            ctx: Optional[Context] = None
+        ) -> List[UserResponse]:
+            """Search for Jira users by name, email, or username.
+
+            This tool performs a fuzzy search across user names and email addresses,
+            making it useful for finding a user's Jira ID when you only have partial
+            information.
+
+            Args:
+                query: Search query - can be a partial name, email address, or username.
+                       Examples: "john", "jsmith", "john.smith@company.com"
+                max_results: Maximum number of results to return (default: 50)
+                ctx: MCP context for progress reporting
+
+            Returns:
+                List of matching users with their account_id, name, display_name,
+                email_address, and active status. Use the 'name' field for assignee
+                operations in self-hosted Jira, or 'account_id' for Jira Cloud.
+            """
+            if ctx:
+                await ctx.info(f"Searching for users matching: {query}")
+
+            try:
+                users = await self.client.search_users(query, max_results)
+                if ctx:
+                    await ctx.info(f"Found {len(users)} matching users")
+                return [UserResponse(**user) for user in users]
+            except Exception as e:
+                if ctx:
+                    await ctx.error(f"Failed to search users: {str(e)}")
                 raise
         
         @self.mcp.tool()
@@ -994,7 +1066,6 @@ class JiraMCPServer:
                 if ctx:
                     await ctx.error(f"Failed to remove component alias: {str(e)}")
                 raise
-    
     def _setup_resources(self) -> None:
         """Set up MCP resources for Jira data."""
         
@@ -1026,6 +1097,7 @@ class JiraMCPServer:
 - **Labels:** {', '.join(issue['labels']) if issue['labels'] else 'None'}
 - **Components:** {', '.join(issue['components']) if issue['components'] else 'None'}
 - **Fix Versions:** {', '.join(issue['fix_versions']) if issue['fix_versions'] else 'None'}
+- **Target Version:** {', '.join(issue['target_version']) if issue['target_version'] else 'None'}
 - **Work Type:** {issue['work_type'] or 'None'}
 - **Security Level:** {issue['security_level'] or 'None'}
 - **Due Date:** {issue['due_date'] or 'None'}

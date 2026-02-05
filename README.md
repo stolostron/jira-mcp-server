@@ -23,8 +23,10 @@ A Model Context Protocol (MCP) server that provides seamless integration with Ji
 - **Watcher Management**: Add, remove, and list watchers on issues
 - **Issue Linking**: Create links between issues with different relationship types (blocks, relates to, etc.)
 - **Project Access**: List and browse Jira projects and components
+- **User Search**: Find Jira users by name, email, or username for assignment
 - **Comments**: Add comments to issues with security levels
 - **Time Logging**: Log work time on issues with detailed comments
+- **Workflow Enforcement**: Requires fix_version before transitioning beyond "In Progress"
 - **JQL Support**: Full Jira Query Language support for advanced searching
 - **Rate Limiting**: Built-in throttling to respect Jira API limits
 - **Async Operations**: Fully asynchronous for optimal performance
@@ -404,6 +406,8 @@ transition_issue(
 )
 ```
 
+**Note:** Transitions beyond "New", "Backlog", and "In Progress" require `fix_version` to be set on the issue. This ensures all completed work is tied to a release version.
+
 ### `add_comment`
 Add a comment to an issue:
 ```python
@@ -450,6 +454,23 @@ get_projects()
 Get components for a specific project:
 ```python
 get_project_components(project_key="PROJ")
+```
+
+### `search_users`
+Search for Jira users by name, email, or username:
+```python
+search_users(
+    query="john",
+    max_results=50
+)
+```
+
+Returns matching users with their account_id, name, display_name, email_address, and active status. Useful for finding user IDs when assigning issues.
+
+### `debug_issue_fields`
+Get all raw Jira fields for an issue (useful for debugging custom fields):
+```python
+debug_issue_fields(issue_key="PROJ-123")
 ```
 
 ### Team Management Tools
