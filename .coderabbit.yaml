@@ -54,8 +54,6 @@ reviews:
       enabled: true
     shellcheck:
       enabled: true
-    mypy:
-      enabled: true
 
 chat:
   auto_reply: true
