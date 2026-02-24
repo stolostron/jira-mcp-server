@@ -562,24 +562,26 @@ class JiraMCPServer:
                 ctx: MCP context for progress reporting
 
             Note:
-                Transitions to statuses beyond 'New', 'Backlog', and 'In Progress'
-                require fix_version to be set on the issue.
+                It is highly recommended to set fix_version on the issue before
+                transitioning to statuses beyond 'New', 'Backlog', and 'In Progress'.
             """
             if ctx:
                 await ctx.info(f"Transitioning issue {issue_key} to {transition}")
 
             try:
-                # Check if target status requires fix_version
+                # Warn if fix_version is not set for statuses beyond early stages
                 if transition.lower() not in EARLY_STATUSES:
-                    # Fetch issue to check fix_versions
                     current_issue = await self.client.get_issue(issue_key)
                     fix_versions = current_issue.get('fix_versions', [])
                     if not fix_versions:
-                        raise ValueError(
-                            f"Cannot transition {issue_key} to '{transition}': "
-                            f"fix_version must be set before moving beyond 'In Progress'. "
-                            f"Please update the issue with a fix_version first."
+                        warning_msg = (
+                            f"Warning: {issue_key} is being transitioned to '{transition}' "
+                            f"without a fix_version set. It is highly recommended to set "
+                            f"fix_version before moving beyond 'In Progress'."
                         )
+                        if ctx:
+                            await ctx.warning(warning_msg)
+                        logger.warning(warning_msg)
 
                 issue = await self.client.transition_issue(issue_key, transition)
                 if ctx:

@@ -155,49 +155,6 @@ The example client demonstrates:
 - Getting Jira projects
 - Searching for issues
 
-## AI Assistant Configuration
-
-To optimize the Jira MCP server integration with AI assistants, create a simple configuration file that specifies your default Jira project and user information.
-
-### Configuration Setup
-
-Create a configuration file in your AI assistant's expected location with just two lines:
-
-```
-Jira project = YOUR_PROJECT_KEY
-Jira assignee or reported = your.email@company.com
-```
-
-### File Locations by AI Assistant
-
-**Claude Code:**
-- Create `CLAUDE.md` in your project root, or
-- Create `~/.claude/CLAUDE.md` for global access
-
-**Gemini CLI:**
-- Create `GEMINI.md` in your project root, or
-- Create `~/.gemini/GEMINI.md` for global access
-
-**Cursor:**
-- In Cursor, go to **Preferences > Cursor Settings > Rules & Memories > User Rules**
-- Add the two-line configuration directly in the User Rules section
-
-### Example Configuration
-
-```
-Jira project = ACM
-Jira assignee or reported = john.doe@company.com
-```
-
-This simple configuration allows the AI assistant to:
-- Default to your specified project when creating or searching issues
-- Automatically assign new issues to you when no assignee is specified
-- Use your email as the reporter for new issues
-
-### Why This Works
-
-The AI assistant will automatically detect these settings and apply them as intelligent defaults when working with Jira issues, reducing the need to specify project keys and assignees repeatedly.
-
 ## Client Configuration
 
 ### Claude Code
@@ -575,6 +532,15 @@ The server also provides MCP resources for read-only access:
 
 ## Development
 
+### Running Tests
+
+Run all tests with:
+```bash
+make tests
+```
+
+This runs all test_*.py files using pytest with verbose output.
+
 ### Setting up Development Environment
 
 1. Install development dependencies:
@@ -584,7 +550,7 @@ pip install -e ".[dev]"
 
 2. Run tests:
 ```bash
-pytest
+make tests
 ```
 
 3. Format code:
