@@ -47,8 +47,6 @@ venv.bak/
 Thumbs.db
 CLAUDE.md
 GEMINI.md
-.gitignore
-.gitignore
 .claude/settings.local.json
 .claude/settings.json
 .claude/hook-handler.sh

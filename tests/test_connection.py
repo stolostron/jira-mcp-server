@@ -13,15 +13,15 @@ This script will:
 """
 
 import asyncio
+import os
 import sys
 import pytest
 from jira_mcp_server.config import JiraConfig
 from jira_mcp_server.client import JiraClient
 
 
-@pytest.mark.asyncio
-async def test_jira_connection():
-    """Test Jira connection and basic operations."""
+async def _run_jira_connection_check() -> None:
+    """Run Jira connection validation and raise on failures."""
 
     print("=" * 70)
     print("JIRA MCP SERVER - CONNECTION TEST")
@@ -33,15 +33,13 @@ async def test_jira_connection():
     try:
         config = JiraConfig.from_env()
         print(f"   ✅ Configuration loaded successfully")
-        print(f"   Server URL: {config.server_url}")
-        print(f"   Email: {config.email}")
+        print("   Server URL: [redacted]")
+        print("   Email: [redacted]")
         print(f"   Is Cloud: {config.is_cloud()}")
-        print(f"   Token length: {len(config.access_token)} characters")
-        print(f"   Token preview: {config.access_token[:15]}...{config.access_token[-10:]}")
         print()
     except Exception as e:
         print(f"   ❌ Failed to load configuration: {e}")
-        return False
+        raise
 
     # Step 2: Validate required fields
     print("🔍 Step 2: Validating required fields...")
@@ -51,7 +49,7 @@ async def test_jira_connection():
         print()
     except ValueError as e:
         print(f"   ❌ Missing required fields: {e}")
-        return False
+        raise
 
     # Step 3: Test connection
     print("🔌 Step 3: Testing connection to Jira...")
@@ -70,10 +68,10 @@ async def test_jira_connection():
         print("  - No access to this Jira instance")
         print()
         print("To fix:")
-        print("  1. Go to: https://id.atlassian.com/manage-profile/security/api-tokens")
+        print("  1. Refer to the Atlassian API token documentation")
         print("  2. Create a new API token")
         print("  3. Update JIRA_ACCESS_TOKEN in your .env file")
-        return False
+        raise
 
     # Step 4: Test getting user info
     print("👤 Step 4: Getting current user information...")
@@ -103,7 +101,7 @@ async def test_jira_connection():
         print()
     except Exception as e:
         print(f"   ❌ Failed to get projects: {e}")
-        return False
+        raise
 
     # Step 6: Test searching for issues
     print("🔎 Step 6: Testing issue search...")
@@ -137,14 +135,20 @@ async def test_jira_connection():
     print("  3. Try asking: 'Show me my Jira issues'")
     print()
 
-    return True
+
+@pytest.mark.asyncio
+async def test_jira_connection():
+    """Test Jira connection and basic operations."""
+    if not os.getenv("JIRA_ACCESS_TOKEN"):
+        pytest.skip("Jira credentials not configured for integration test")
+    await _run_jira_connection_check()
 
 
 def main():
     """Main entry point."""
     try:
-        success = asyncio.run(test_jira_connection())
-        sys.exit(0 if success else 1)
+        asyncio.run(_run_jira_connection_check())
+        sys.exit(0)
     except KeyboardInterrupt:
         print("\n\n⚠️  Test interrupted by user")
         sys.exit(1)
