@@ -492,14 +492,6 @@ class JiraMCPServer:
             if ctx:
                 await ctx.info(f"Updating issue: {issue_key}")
 
-            # Warn if work_type or components are not provided
-            if work_type is None:
-                if ctx:
-                    await ctx.warning("STRONGLY RECOMMENDED: Provide work_type when updating issues")
-            if components is None or len(components) == 0:
-                if ctx:
-                    await ctx.warning("STRONGLY RECOMMENDED: Provide components when updating issues")
-            
             fields = {}
             if summary:
                 fields['summary'] = summary
