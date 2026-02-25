@@ -551,6 +551,9 @@ class JiraMCPServer:
             if git_pull_requests:
                 fields['customfield_12310220'] = git_pull_requests  # Git Pull Requests custom field
 
+            if not fields:
+                raise ValueError("At least one field must be provided to update an issue")
+
             try:
                 issue = await self.client.update_issue(issue_key, **fields)
                 if ctx:
