@@ -297,9 +297,9 @@ class JiraMCPServer:
             project_key: str,
             summary: str,
             description: str,
-            priority: str,
-            work_type: str,
-            components: List[str],
+            priority: str = "Normal",
+            work_type: Optional[str] = None,
+            components: Optional[List[str]] = None,
             target_version: Optional[List[str]] = None,
             issue_type: str = "Task",
             due_date: Optional[str] = None,
@@ -320,18 +320,21 @@ class JiraMCPServer:
         ) -> IssueResponse:
             """Create a new Jira issue.
 
+            ⚠️ WARNING: Issues created in Jira CANNOT BE UNDONE. Issues are permanent records and cannot be deleted.
+            Only create issues when explicitly requested by the user. Never use for testing or if uncertain about parameters.
+
             Args:
                 project_key: Project key (e.g., 'PROJ')
                 summary: Issue summary/title
                 description: Issue description
                 issue_type: Issue type (e.g., 'Bug', 'Task', 'Story', 'Sub-task')
-                priority: Issue priority (required)
+                priority: Issue priority (defaults to 'Normal')
                 assignee: Username of assignee
                 team: Team name to add as watchers (all team members will be added as watchers)
                 labels: List of labels to add
                 fix_versions: List of fix version names (set when issue is closed)
                 target_version: List of target version names (set when issue is created)
-                work_type: Work type for the issue (required). Available options:
+                work_type: Work type for the issue (STRONGLY RECOMMENDED). Available options:
                     - **None** = -1
                     - **Associate Wellness & Development** = 46650
                     - **Future Sustainability** = 48051
@@ -343,7 +346,7 @@ class JiraMCPServer:
                 due_date: Due date in YYYY-MM-DD format
                 target_start: Target start date in YYYY-MM-DD format
                 target_end: Target end date in YYYY-MM-DD format
-                components: List of component names (required)
+                components: List of component names (STRONGLY RECOMMENDED)
                 original_estimate: Original time estimate (e.g., '1h 30m')
                 story_points: Story points value
                 git_commit: Git commit hash or reference
@@ -357,18 +360,20 @@ class JiraMCPServer:
                 raise ValueError("Summary cannot be empty")
             if not description or not description.strip():
                 raise ValueError("Description cannot be empty")
-            if not priority or not priority.strip():
-                raise ValueError("Priority cannot be empty")
-            if not work_type or not str(work_type).strip():
-                raise ValueError("Work type cannot be empty")
-            if not components or len(components) == 0:
-                raise ValueError("Components cannot be empty")
 
             # Validate optional fields if provided
             if assignee is not None and (not assignee or not assignee.strip()):
                 raise ValueError("Assignee cannot be empty")
             if fix_versions is not None and (not fix_versions or len(fix_versions) == 0):
                 raise ValueError("Fix versions cannot be empty")
+
+            # Warn if work_type or components are not provided
+            if work_type is None:
+                if ctx:
+                    await ctx.warning("STRONGLY RECOMMENDED: Provide work_type when creating issues")
+            if components is None or len(components) == 0:
+                if ctx:
+                    await ctx.warning("STRONGLY RECOMMENDED: Provide components when creating issues")
 
             if ctx:
                 await ctx.info(f"Creating issue in project {project_key}")
@@ -443,9 +448,9 @@ class JiraMCPServer:
         @self.mcp.tool()
         async def update_issue(
             issue_key: str,
-            priority: str,
-            work_type: str,
-            components: List[str],
+            priority: Optional[str] = None,
+            work_type: Optional[str] = None,
+            components: Optional[List[str]] = None,
             due_date: Optional[str] = None,
             summary: Optional[str] = None,
             description: Optional[str] = None,
@@ -463,7 +468,7 @@ class JiraMCPServer:
             ctx: Optional[Context] = None
         ) -> IssueResponse:
             """Update an existing Jira issue.
-            
+
             Args:
                 issue_key: Jira issue key (e.g., 'PROJ-123')
                 summary: New summary/title
@@ -473,7 +478,7 @@ class JiraMCPServer:
                 labels: New labels list
                 fix_versions: List of fix version names (set when issue is closed)
                 target_version: List of target version names (set when issue is created)
-                work_type: Work type for the issue. Available options:
+                work_type: Work type for the issue (STRONGLY RECOMMENDED). Available options:
                     - **None** = -1
                     - **Associate Wellness & Development** = 46650
                     - **Future Sustainability** = 48051
@@ -485,7 +490,7 @@ class JiraMCPServer:
                 due_date: Due date in YYYY-MM-DD format
                 target_start: Target start date in YYYY-MM-DD format
                 target_end: Target end date in YYYY-MM-DD format
-                components: List of component names
+                components: List of component names (STRONGLY RECOMMENDED)
                 original_estimate: Original time estimate (e.g., '1h 30m')
                 story_points: Story points value
                 git_commit: Git commit hash or reference
@@ -494,6 +499,14 @@ class JiraMCPServer:
             """
             if ctx:
                 await ctx.info(f"Updating issue: {issue_key}")
+
+            # Warn if work_type or components are not provided
+            if work_type is None:
+                if ctx:
+                    await ctx.warning("STRONGLY RECOMMENDED: Provide work_type when updating issues")
+            if components is None or len(components) == 0:
+                if ctx:
+                    await ctx.warning("STRONGLY RECOMMENDED: Provide components when updating issues")
             
             fields = {}
             if summary:
