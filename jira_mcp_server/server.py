@@ -401,7 +401,7 @@ class JiraMCPServer:
                 fields['components'] = [{'name': component} for component in resolved_components]
             if original_estimate:
                 fields['timetracking'] = {'originalEstimate': original_estimate}
-            if story_points:
+            if story_points is not None:
                 fields['customfield_12310243'] = story_points  # Story points custom field
             if git_commit:
                 _validate_git_commit_sha(git_commit)
@@ -527,7 +527,7 @@ class JiraMCPServer:
                 fields['components'] = [{'name': component} for component in resolved_components]
             if original_estimate:
                 fields['timetracking'] = {'originalEstimate': original_estimate}
-            if story_points:
+            if story_points is not None:
                 fields['customfield_12310243'] = story_points  # Story points custom field
             if git_commit:
                 _validate_git_commit_sha(git_commit)
