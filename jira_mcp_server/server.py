@@ -367,14 +367,6 @@ class JiraMCPServer:
             if fix_versions is not None and (not fix_versions or len(fix_versions) == 0):
                 raise ValueError("Fix versions cannot be empty")
 
-            # Warn if work_type or components are not provided
-            if work_type is None:
-                if ctx:
-                    await ctx.warning("STRONGLY RECOMMENDED: Provide work_type when creating issues")
-            if components is None or len(components) == 0:
-                if ctx:
-                    await ctx.warning("STRONGLY RECOMMENDED: Provide components when creating issues")
-
             if ctx:
                 await ctx.info(f"Creating issue in project {project_key}")
 
