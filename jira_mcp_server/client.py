@@ -460,6 +460,24 @@ class JiraClient:
         except JIRAError as e:
             raise ValueError(f"Failed to get raw fields for issue {issue_key}: {e}")
     
+    async def get_editmeta(self, issue_key: str) -> Dict[str, Any]:
+        """Get edit metadata for an issue, describing each editable field's schema.
+
+        Returns a dict mapping field IDs to their schema info (name, type, items, etc.).
+        """
+        if not self._jira:
+            raise RuntimeError("Not connected to Jira")
+
+        try:
+            url = f"{self._jira._options['server']}/rest/api/2/issue/{issue_key}/editmeta"
+            response = await self._async_call(
+                lambda: self._jira._session.get(url)
+            )
+            data = response.json()
+            return data.get('fields', {})
+        except JIRAError as e:
+            raise ValueError(f"Failed to get edit metadata for {issue_key}: {e}")
+
     async def add_watcher(self, issue_key: str, username: str) -> Dict[str, Any]:
         """Add a watcher to an issue.
         

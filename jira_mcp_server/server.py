@@ -18,7 +18,9 @@
 
 import asyncio
 import logging
+import os
 import re
+import subprocess
 from typing import List, Dict, Any, Optional
 from fastmcp import FastMCP, Context
 from pydantic import BaseModel
@@ -178,6 +180,8 @@ class JiraMCPServer:
         self.mcp = FastMCP("Jira MCP Server")
         self.config = JiraConfig.from_env()
         self.client = JiraClient(self.config)
+        self._update_warning: Optional[str] = None
+        self._update_warning_emitted = False
         self._setup_tools()
         self._setup_resources()
     
@@ -197,6 +201,7 @@ class JiraMCPServer:
                 max_results: Maximum number of results to return (default: 100)
                 ctx: MCP context for progress reporting
             """
+            await self._emit_update_warning(ctx)
             if ctx:
                 await ctx.info(f"Searching issues with JQL: {jql}")
             
@@ -230,6 +235,7 @@ class JiraMCPServer:
                 max_results: Maximum number of results to return (default: 100)
                 ctx: MCP context for progress reporting
             """
+            await self._emit_update_warning(ctx)
             if ctx:
                 await ctx.info(f"Searching issues assigned to team '{team_name}'")
             
@@ -281,6 +287,7 @@ class JiraMCPServer:
                 issue_key: Jira issue key (e.g., 'PROJ-123')
                 ctx: MCP context for progress reporting
             """
+            await self._emit_update_warning(ctx)
             if ctx:
                 await ctx.info(f"Fetching issue: {issue_key}")
             
@@ -367,6 +374,7 @@ class JiraMCPServer:
             if fix_versions is not None and (not fix_versions or len(fix_versions) == 0):
                 raise ValueError("Fix versions cannot be empty")
 
+            await self._emit_update_warning(ctx)
             if ctx:
                 await ctx.info(f"Creating issue in project {project_key}")
 
@@ -548,6 +556,72 @@ class JiraMCPServer:
                     await ctx.error(f"Failed to update issue {issue_key}: {str(e)}")
                 raise
         
+        @self.mcp.tool()
+        async def clear_field(
+            issue_key: str,
+            field_name: str,
+            ctx: Optional[Context] = None
+        ) -> IssueResponse:
+            """Clear (unset) a field on a Jira issue.
+
+            Dynamically determines the correct empty value by inspecting the
+            field's schema from the Jira edit metadata.
+
+            Args:
+                issue_key: Jira issue key (e.g., 'PROJ-123')
+                field_name: The Jira field ID to clear (e.g., 'fixVersions',
+                    'customfield_12319940', 'duedate', 'labels', 'components',
+                    'assignee', 'priority', 'security', 'timetracking').
+                    Use the debug_issue_fields tool to discover available field IDs.
+                ctx: MCP context for progress reporting
+            """
+            if ctx:
+                await ctx.info(f"Fetching edit metadata for {issue_key}")
+
+            editmeta = await self.client.get_editmeta(issue_key)
+
+            if field_name not in editmeta:
+                available = ', '.join(sorted(editmeta.keys()))
+                raise ValueError(
+                    f"Field '{field_name}' is not editable on {issue_key}. "
+                    f"Editable fields: {available}"
+                )
+
+            schema = editmeta[field_name].get('schema', {})
+            field_type = schema.get('type', '')
+
+            # Determine the correct clear value based on schema type
+            if field_type == 'array':
+                clear_value = []
+            elif field_type in ('string', 'date', 'datetime'):
+                clear_value = None
+            elif field_type == 'number':
+                clear_value = None
+            elif field_type == 'timetracking':
+                clear_value = {'originalEstimate': '0m'}
+            else:
+                # option, user, security, priority, issuelink, etc.
+                clear_value = None
+
+            if ctx:
+                await ctx.info(
+                    f"Clearing '{field_name}' (type={field_type}) on {issue_key}"
+                )
+
+            try:
+                issue = await self.client.update_issue(
+                    issue_key, **{field_name: clear_value}
+                )
+                if ctx:
+                    await ctx.info(f"Cleared '{field_name}' on {issue_key}")
+                return IssueResponse(**issue)
+            except Exception as e:
+                if ctx:
+                    await ctx.error(
+                        f"Failed to clear '{field_name}' on {issue_key}: {str(e)}"
+                    )
+                raise
+
         @self.mcp.tool()
         async def transition_issue(
             issue_key: str,
@@ -1130,6 +1204,43 @@ class JiraMCPServer:
             except Exception as e:
                 return f"Error fetching projects: {str(e)}"
     
+    async def _check_for_updates(self) -> None:
+        """Check if origin/main has commits not present locally."""
+        try:
+            # Find the repo root (server may be installed anywhere)
+            repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            git_dir = os.path.join(repo_dir, ".git")
+            if not os.path.isdir(git_dir):
+                return
+
+            # Fetch latest refs from origin (quiet, no output)
+            subprocess.run(
+                ["git", "fetch", "origin", "main", "--quiet"],
+                cwd=repo_dir, capture_output=True, timeout=10
+            )
+
+            # Count commits on origin/main that are not in local HEAD
+            result = subprocess.run(
+                ["git", "rev-list", "HEAD..origin/main", "--count"],
+                cwd=repo_dir, capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                count = int(result.stdout.strip())
+                if count > 0:
+                    self._update_warning = (
+                        f"jira-mcp-server update available: origin/main is {count} "
+                        f"commit(s) ahead. Run 'git pull' in {repo_dir} to update."
+                    )
+                    logger.warning(self._update_warning)
+        except Exception as e:
+            logger.debug(f"Update check failed (non-fatal): {e}")
+
+    async def _emit_update_warning(self, ctx: Optional[Context]) -> None:
+        """Emit update warning once per session via MCP context."""
+        if self._update_warning and not self._update_warning_emitted and ctx:
+            await ctx.warning(self._update_warning)
+            self._update_warning_emitted = True
+
     async def start(self) -> None:
         """Start the MCP server."""
         try:
@@ -1137,6 +1248,7 @@ class JiraMCPServer:
             await self.client.connect()
             logger.info("Connected to Jira successfully")
             logger.info(f"Server URL: {self.config.server_url}")
+            await self._check_for_updates()
         except Exception as e:
             logger.error(f"Failed to start server: {e}")
             raise
