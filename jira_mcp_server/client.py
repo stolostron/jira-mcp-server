@@ -473,10 +473,12 @@ class JiraClient:
             response = await self._async_call(
                 lambda: self._jira._session.get(url)
             )
+            if not response.ok:
+                raise ValueError(f"Failed to get edit metadata for {issue_key}: HTTP {response.status_code}")
             data = response.json()
             return data.get('fields', {})
         except JIRAError as e:
-            raise ValueError(f"Failed to get edit metadata for {issue_key}: {e}")
+            raise ValueError(f"Failed to get edit metadata for {issue_key}: {e}") from e
 
     async def add_watcher(self, issue_key: str, username: str) -> Dict[str, Any]:
         """Add a watcher to an issue.
