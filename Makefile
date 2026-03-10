@@ -18,6 +18,9 @@ test tests:
 	python3 -m pytest tests/ -v
 
 install-commands:
-	@mkdir -p $(HOME)/.claude/commands
-	@ln -sf $(CURDIR)/.claude/commands/jira-create.md $(HOME)/.claude/commands/jira-create.md
-	@echo "Symlinked jira-create.md to ~/.claude/commands/"
+	`@mkdir` -p "$(HOME)/.claude/commands"
+	`@for` cmd in "$(CURDIR)"/.claude/commands/*.md; do \
+		name="$$(basename "$$cmd")"; \
+		ln -sf "$$cmd" "$(HOME)/.claude/commands/$$name"; \
+		echo "Symlinked $$name to ~/.claude/commands/"; \
+	done
