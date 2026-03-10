@@ -10,10 +10,12 @@ A Model Context Protocol (MCP) server that provides seamless integration with Ji
 4. [Usage](#usage)
 5. [Client Configuration](#client-configuration)
 6. [Available Tools](#available-tools)
-7. [Development](#development)
-8. [Troubleshooting](#troubleshooting)
-9. [Advanced Configuration](#advanced-configuration)
-10. [License & Contributing](#license--contributing)
+7. [Slash Commands](#slash-commands)
+8. [Automatic Update Notifications](#automatic-update-notifications)
+9. [Development](#development)
+10. [Troubleshooting](#troubleshooting)
+11. [Advanced Configuration](#advanced-configuration)
+12. [License & Contributing](#license--contributing)
 
 ## Features
 
@@ -530,7 +532,49 @@ The server also provides MCP resources for read-only access:
 - `jira://issue/{issue_key}` - Get formatted issue details
 - `jira://projects` - Get formatted list of all projects
 
+## Slash Commands
+
+The project includes custom slash commands that can be installed for use in Claude Code.
+
+### `/jira-create` — Interactive Issue Creation
+
+The `/jira-create` command provides a guided, interactive flow for creating Jira issues. It walks you through each step using prompts:
+
+1. **Issue Type** — Select from Story, Bug, Task, Spike, Feature, Epic, or Sub-task
+2. **Specialist Agent** — A specialist agent (e.g., `story-specialist`, `bug-specialist`) is launched to help craft the summary and description based on the issue type
+3. **Core Fields** — Priority, Work Type, Original Estimate, Story Points
+4. **Categorization** — Component, Labels, Target Version
+5. **Parent / Linking** — Link to a parent issue or related issues
+6. **Confirmation** — Review all fields before creation
+7. **Post-Creation** — Option to create child stories (for Epics) or related issues (for Features)
+
+To install the command:
+
+```bash
+make install-commands
+```
+
+This symlinks the command to `~/.claude/commands/` so it's available globally in Claude Code. You can then invoke it by typing `/jira-create` in any Claude Code session.
+
+## Automatic Update Notifications
+
+The server automatically checks for updates when it starts. It compares your local checkout against `origin/main` and, if new commits are available, emits a one-time warning on the first tool call of the session:
+
+```
+jira-mcp-server update available: origin/main is 3 commit(s) ahead. Run 'git pull' in /path/to/jira-mcp-server to update.
+```
+
+This check is non-blocking and fails silently if the repository is not available or the fetch times out.
+
 ## Development
+
+### Makefile Targets
+
+```bash
+make help              # Show available targets
+make tests             # Run all tests in the tests/ directory
+make install-commands  # Symlink project commands to ~/.claude/commands/
+```
 
 ### Running Tests
 
