@@ -556,6 +556,15 @@ make install-commands
 
 This symlinks the command to `~/.claude/commands/` so it's available globally in Claude Code. You can then invoke it by typing `/jira-create` in any Claude Code session.
 
+### `/summary` — Work Summary
+
+The `/summary` command generates a formal summary of work performed in the current AI session. It gathers repository changes (`git diff`, recent commits) and conversation context (Jira activity, decisions made) to produce:
+
+1. **Formal Work Summary** — A structured markdown summary with changes, Jira activity, and notes
+2. **Git Commit Message** — A plain-text version suitable for direct use in CLI commands (no special characters that interfere with shell interpretation)
+3. **Jira Integration** — Option to post the summary as a comment on a Jira issue
+4. **Git Reference Reminder** — Reminds you to add commit SHA and PR URL to the Jira issue
+
 ## Automatic Update Notifications
 
 The server automatically checks for updates when it starts. It compares your local checkout against `origin/main` and, if new commits are available, emits a one-time warning on the first tool call of the session:

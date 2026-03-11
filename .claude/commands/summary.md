@@ -46,6 +46,7 @@ Generate a plain-text version suitable for a git commit message:
 - First line is a concise summary under 72 characters
 - Followed by a blank line and bullet points describing the changes
 - Use only ASCII characters, hyphens, and standard punctuation
+- This message will be used directly in CLI commands (e.g., `git commit -m`), so avoid characters that interfere with shell interpretation (quotes, backticks, dollar signs, parentheses, etc.)
 
 Present it in a code block labeled **Git Commit Message**.
 
