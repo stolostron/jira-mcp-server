@@ -746,12 +746,9 @@ class JiraClient:
                 'key': issue.fields.parent.key,
                 'summary': issue.fields.parent.fields.summary,
                 'issue_type': issue.fields.parent.fields.issuetype.name
-            } if getattr(issue.fields, 'parent', None) else None
+            } if getattr(issue.fields, 'parent', None) else None,
+            'parent_link': getattr(issue.fields, 'customfield_12313140', None),  # Parent Link custom field
+            'epic_link': getattr(issue.fields, 'customfield_12311140', None),  # Epic Link custom field
         }
-
-        # Add Epic Link field when issue type is Story
-        if issue.fields.issuetype.name == 'Story':
-            epic_link = getattr(issue.fields, 'customfield_12311140', None)
-            result['epic_link'] = epic_link
 
         return result
