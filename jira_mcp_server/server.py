@@ -59,6 +59,21 @@ def _validate_git_commit_sha(sha: str) -> None:
         raise ValueError(f"Git commit SHA must be either 40 characters (SHA-1) or 64 characters (SHA-256), got {len(sha)} characters: {sha}")
 
 
+def _merge_custom_fields(
+    named_fields: Dict[str, Any],
+    custom_fields: Optional[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """Merge caller-supplied custom_fields with named-parameter fields.
+
+    Named-parameter fields take precedence when both dicts contain the same key.
+    """
+    if not custom_fields:
+        return named_fields
+    merged = dict(custom_fields)
+    merged.update(named_fields)
+    return merged
+
+
 # Pydantic models for structured responses
 class SubtaskResponse(BaseModel):
     key: str
@@ -323,6 +338,7 @@ class JiraMCPServer:
             git_pull_requests: Optional[str] = None,
             parent: Optional[str] = None,
             epic_name: Optional[str] = None,
+            custom_fields: Optional[Dict[str, Any]] = None,
             ctx: Optional[Context] = None
         ) -> IssueResponse:
             """Create a new Jira issue.
@@ -360,6 +376,12 @@ class JiraMCPServer:
                 git_pull_requests: Git pull requests, comma separated list of pull requests URLs
                 parent: Parent issue key for sub-tasks (e.g., 'PROJ-123')
                 epic_name: Epic Name (required for Epic issue type)
+                custom_fields: Dictionary of arbitrary Jira field IDs to values. Use the
+                    debug_issue_fields tool to discover available field IDs on existing issues.
+                    Useful for instance-specific fields such as Parent Link or Epic Link.
+                    Example: {"customfield_12313140": "PROJ-100"}.
+                    Named parameters (e.g. story_points) take precedence over
+                    custom_fields when both set the same underlying field.
                 ctx: MCP context for progress reporting
             """
             # Validate required fields
@@ -420,7 +442,9 @@ class JiraMCPServer:
                 fields['parent'] = {'key': parent}  # Parent issue for sub-tasks
             if epic_name:
                 fields['customfield_12311141'] = epic_name  # Epic Name custom field
-            
+
+            fields = _merge_custom_fields(fields, custom_fields)
+
             try:
                 issue = await self.client.create_issue(
                     project_key, summary, description, issue_type, **fields
@@ -465,6 +489,7 @@ class JiraMCPServer:
             story_points: Optional[float] = None,
             git_commit: Optional[str] = None,
             git_pull_requests: Optional[str] = None,
+            custom_fields: Optional[Dict[str, Any]] = None,
             ctx: Optional[Context] = None
         ) -> IssueResponse:
             """Update an existing Jira issue.
@@ -495,6 +520,12 @@ class JiraMCPServer:
                 story_points: Story points value
                 git_commit: Git commit hash or reference
                 git_pull_requests: Git pull requests, comma separated list of pull requests URLs
+                custom_fields: Dictionary of arbitrary Jira field IDs to values. Use the
+                    debug_issue_fields tool to discover available field IDs on existing issues.
+                    Useful for instance-specific fields such as Parent Link or Epic Link.
+                    Example: {"customfield_12313140": "PROJ-100"}.
+                    Named parameters (e.g. story_points) take precedence over
+                    custom_fields when both set the same underlying field.
                 ctx: MCP context for progress reporting
             """
             if ctx:
@@ -542,6 +573,8 @@ class JiraMCPServer:
                 fields['customfield_12317372'] = git_commit  # Git Commit custom field
             if git_pull_requests:
                 fields['customfield_12310220'] = git_pull_requests  # Git Pull Requests custom field
+
+            fields = _merge_custom_fields(fields, custom_fields)
 
             if not fields:
                 raise ValueError("At least one field must be provided to update an issue")
