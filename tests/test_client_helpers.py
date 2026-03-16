@@ -1,4 +1,20 @@
-"""Tests for client helper methods: _extract_sprint, _parse_issue_links, _extract_user_display_name."""
+# Copyright 2025 Red Hat, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# This file was developed with AI assistance.
+
+"""Tests for client helper methods: _extract_sprint, _extract_user_display_name, _extract_user_list, _parse_issue_links."""
 
 from unittest.mock import MagicMock
 
@@ -11,7 +27,7 @@ from jira_mcp_server.config import JiraConfig
 @pytest.fixture
 def client():
     """Create a JiraClient instance (not connected) for testing helper methods."""
-    config = JiraConfig(server_url="https://test.example.com", access_token="test")
+    config = JiraConfig(server_url="https://test.atlassian.net", access_token="test-token")
     return JiraClient(config)
 
 
@@ -74,6 +90,46 @@ class TestExtractUserDisplayName:
     def test_empty_string_returns_none(self, client):
         """Empty string returns None."""
         assert JiraClient._extract_user_display_name("") is None
+
+
+# --- _extract_user_list tests ---
+
+class TestExtractUserList:
+    def test_list_of_objects(self, client):
+        """List of user objects returns display names."""
+        user1 = MagicMock()
+        user1.displayName = "Alice Smith"
+        user2 = MagicMock()
+        user2.displayName = "Bob Jones"
+        assert JiraClient._extract_user_list([user1, user2]) == ["Alice Smith", "Bob Jones"]
+
+    def test_list_of_strings(self, client):
+        """List of plain strings is returned as-is."""
+        assert JiraClient._extract_user_list(["alice", "bob"]) == ["alice", "bob"]
+
+    def test_single_string_not_split(self, client):
+        """Single string is wrapped in list, not split into characters."""
+        assert JiraClient._extract_user_list("alice") == ["alice"]
+
+    def test_none_returns_empty(self, client):
+        """None input returns empty list."""
+        assert JiraClient._extract_user_list(None) == []
+
+    def test_empty_list_returns_empty(self, client):
+        """Empty list returns empty list."""
+        assert JiraClient._extract_user_list([]) == []
+
+    def test_mixed_objects_and_strings(self, client):
+        """Mix of user objects and plain strings is handled."""
+        user = MagicMock()
+        user.displayName = "Alice Smith"
+        result = JiraClient._extract_user_list([user, "bob"])
+        assert result == ["Alice Smith", "bob"]
+
+    def test_non_list_non_string_wrapped(self, client):
+        """Non-list, non-string value is wrapped and converted to string."""
+        result = JiraClient._extract_user_list(42)
+        assert result == ["42"]
 
 
 # --- _parse_issue_links tests ---
@@ -152,3 +208,81 @@ class TestParseIssueLinks:
     def test_empty_list(self, client):
         """Empty links list returns empty list."""
         assert client._parse_issue_links([]) == []
+
+    def test_none_input(self, client):
+        """None input returns empty list."""
+        assert client._parse_issue_links(None) == []
+
+    def test_link_with_none_type(self, client):
+        """Link where type is None uses 'unknown' as fallback."""
+        link = MagicMock()
+        link.type = None
+        outward = MagicMock()
+        outward.key = "ACM-400"
+        outward.fields.summary = "Some issue"
+        link.outwardIssue = outward
+        del link.inwardIssue
+
+        result = client._parse_issue_links([link])
+        assert len(result) == 1
+        assert result[0]['type'] == 'unknown'
+        assert result[0]['key'] == 'ACM-400'
+
+    def test_link_with_no_target(self, client):
+        """Link with neither outwardIssue nor inwardIssue is skipped."""
+        link = MagicMock(spec=[])
+
+        result = client._parse_issue_links([link])
+        assert result == []
+
+    def test_link_with_none_target_key(self, client):
+        """Link where target issue has no key is skipped."""
+        link = MagicMock()
+        link_type = MagicMock()
+        link_type.name = "Blocks"
+        link.type = link_type
+        outward = MagicMock()
+        outward.key = None
+        link.outwardIssue = outward
+        del link.inwardIssue
+
+        result = client._parse_issue_links([link])
+        assert result == []
+
+    def test_link_with_missing_summary(self, client):
+        """Link where target issue has no summary returns None for summary."""
+        link = MagicMock()
+        link_type = MagicMock()
+        link_type.name = "Relates"
+        link.type = link_type
+        outward = MagicMock()
+        outward.key = "ACM-500"
+        outward.fields = None
+        link.outwardIssue = outward
+        del link.inwardIssue
+
+        result = client._parse_issue_links([link])
+        assert len(result) == 1
+        assert result[0]['key'] == 'ACM-500'
+        assert result[0]['summary'] is None
+
+    def test_malformed_link_does_not_crash_others(self, client):
+        """One malformed link does not prevent parsing of valid links."""
+        bad_link = MagicMock()
+        bad_link.type = None
+        bad_link.outwardIssue = None
+        del bad_link.inwardIssue
+
+        good_link = MagicMock()
+        lt = MagicMock()
+        lt.name = "Blocks"
+        good_link.type = lt
+        outward = MagicMock()
+        outward.key = "ACM-600"
+        outward.fields.summary = "Valid issue"
+        good_link.outwardIssue = outward
+        del good_link.inwardIssue
+
+        result = client._parse_issue_links([bad_link, good_link])
+        assert len(result) == 1
+        assert result[0]['key'] == 'ACM-600'

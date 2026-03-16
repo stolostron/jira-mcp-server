@@ -1,6 +1,20 @@
-"""Mock-based tests for _issue_to_dict with all new fields."""
+# Copyright 2025 Red Hat, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# This file was developed with AI assistance.
 
-import asyncio
+"""Mock-based tests for _issue_to_dict with all new fields."""
 
 import pytest
 
@@ -12,7 +26,7 @@ from tests.conftest import make_mock_issue
 @pytest.fixture
 def client():
     """Create a JiraClient instance for testing _issue_to_dict."""
-    config = JiraConfig(server_url="https://redhat.atlassian.net", access_token="test")
+    config = JiraConfig(server_url="https://test.atlassian.net", access_token="test-token")
     return JiraClient(config)
 
 
@@ -28,6 +42,7 @@ class TestStoryWithAllFields:
             severity="Important",
             versions=["ACM 2.15.0"],
             acceptance_criteria="All tests pass and coverage above 80%",
+            contributors=["Alice Smith", "Bob Jones"],
             issuelinks=[
                 {'type': 'Blocks', 'direction': 'outward', 'key': 'ACM-100', 'summary': 'Blocked task'},
                 {'type': 'Relates', 'direction': 'inward', 'key': 'ACM-200', 'summary': 'Related work'},
@@ -43,6 +58,7 @@ class TestStoryWithAllFields:
         assert result['severity'] == "Important"
         assert result['affects_versions'] == ["ACM 2.15.0"]
         assert result['acceptance_criteria'] == "All tests pass and coverage above 80%"
+        assert result['contributors'] == ["Alice Smith", "Bob Jones"]
         assert len(result['issue_links']) == 2
         assert result['issue_links'][0]['direction'] == 'outward'
         assert result['issue_links'][1]['direction'] == 'inward'
@@ -144,6 +160,7 @@ class TestMinimalFields:
         assert result['severity'] is None
         assert result['affects_versions'] == []
         assert result['acceptance_criteria'] is None
+        assert result['contributors'] == []
         assert result['issue_links'] == []
         assert result['attachments'] == []
         assert result['key'] == "ACM-999"

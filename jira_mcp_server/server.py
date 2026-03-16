@@ -41,14 +41,15 @@ EARLY_STATUSES = {'new', 'backlog', 'in progress'}
 def _user_ref(identifier: str) -> Dict[str, str]:
     """Build a user reference dict for Jira Cloud.
 
-    Accepts either an accountId (contains ':') or a username/email,
-    and returns the appropriate dict format for the Jira REST API.
+    Only accountId is valid on Jira Cloud (name was deprecated for privacy).
+    Use search_users to resolve a display name or email to an accountId first.
     """
-    if ':' in identifier or identifier.startswith('7') and len(identifier) > 30:
+    if ':' in identifier or (identifier.startswith('7') and len(identifier) > 30):
         return {'accountId': identifier}
-    if '@' in identifier:
-        return {'accountId': identifier}
-    return {'name': identifier}
+    raise ValueError(
+        f"'{identifier}' does not look like a Jira Cloud accountId. "
+        f"Use search_users to find the accountId for this user first."
+    )
 
 
 def _validate_git_commit_sha(sha: str) -> None:
@@ -472,7 +473,9 @@ class JiraMCPServer:
             if epic_link:
                 fields['customfield_10014'] = epic_link  # Epic Link custom field
             if qa_contact is not None:
-                fields['customfield_10470'] = _user_ref(qa_contact)  # QA Contact
+                qa_val = qa_contact.strip() if isinstance(qa_contact, str) else ""
+                if qa_val:
+                    fields['customfield_10470'] = _user_ref(qa_val)  # QA Contact
             if severity is not None:
                 fields['customfield_10840'] = {'value': severity}  # Severity
             if affects_versions is not None:
@@ -480,7 +483,9 @@ class JiraMCPServer:
             if acceptance_criteria is not None:
                 fields['customfield_10718'] = acceptance_criteria  # Acceptance Criteria
             if contributors is not None:
-                fields['customfield_10466'] = [_user_ref(c) for c in contributors]  # Contributors
+                valid = [c.strip() for c in contributors if isinstance(c, str) and c.strip()]
+                if valid:
+                    fields['customfield_10466'] = [_user_ref(c) for c in valid]  # Contributors
 
             try:
                 issue = await self.client.create_issue(
@@ -626,7 +631,9 @@ class JiraMCPServer:
             if epic_link:
                 fields['customfield_10014'] = epic_link  # Epic Link custom field
             if qa_contact is not None:
-                fields['customfield_10470'] = _user_ref(qa_contact)  # QA Contact
+                qa_val = qa_contact.strip() if isinstance(qa_contact, str) else ""
+                if qa_val:
+                    fields['customfield_10470'] = _user_ref(qa_val)  # QA Contact
             if severity is not None:
                 fields['customfield_10840'] = {'value': severity}  # Severity
             if affects_versions is not None:
@@ -634,7 +641,9 @@ class JiraMCPServer:
             if acceptance_criteria is not None:
                 fields['customfield_10718'] = acceptance_criteria  # Acceptance Criteria
             if contributors is not None:
-                fields['customfield_10466'] = [_user_ref(c) for c in contributors]  # Contributors
+                valid = [c.strip() for c in contributors if isinstance(c, str) and c.strip()]
+                if valid:
+                    fields['customfield_10466'] = [_user_ref(c) for c in valid]  # Contributors
 
             if not fields:
                 raise ValueError("At least one field must be provided to update an issue")

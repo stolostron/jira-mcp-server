@@ -717,22 +717,28 @@ class JiraClient:
     def _parse_issue_links(self, links) -> List[Dict[str, Any]]:
         """Parse issue links into structured format."""
         result = []
-        for link in links:
-            link_type = link.type.name if hasattr(link, 'type') else 'unknown'
-            if hasattr(link, 'outwardIssue'):
+        for link in links or []:
+            try:
+                link_type = getattr(getattr(link, 'type', None), 'name', 'unknown')
+                outward = getattr(link, 'outwardIssue', None)
+                inward = getattr(link, 'inwardIssue', None)
+                target = outward or inward
+                if not target:
+                    continue
+
+                key = getattr(target, 'key', None)
+                if not key:
+                    continue
+
+                summary = getattr(getattr(target, 'fields', None), 'summary', None)
                 result.append({
                     'type': link_type,
-                    'direction': 'outward',
-                    'key': link.outwardIssue.key,
-                    'summary': link.outwardIssue.fields.summary
+                    'direction': 'outward' if outward else 'inward',
+                    'key': key,
+                    'summary': summary,
                 })
-            elif hasattr(link, 'inwardIssue'):
-                result.append({
-                    'type': link_type,
-                    'direction': 'inward',
-                    'key': link.inwardIssue.key,
-                    'summary': link.inwardIssue.fields.summary
-                })
+            except Exception:
+                continue
         return result
 
     def _issue_to_dict(self, issue) -> Dict[str, Any]:
@@ -834,6 +840,10 @@ class JiraClient:
         """Extract list of display names from a multi-user field (may be strings or objects)."""
         if not field_value:
             return []
+        if isinstance(field_value, str):
+            field_value = [field_value]
+        elif not isinstance(field_value, (list, tuple)):
+            field_value = [field_value]
         result = []
         for item in field_value:
             if hasattr(item, 'displayName'):

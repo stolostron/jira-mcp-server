@@ -1,11 +1,25 @@
+# Copyright 2025 Red Hat, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# This file was developed with AI assistance.
+
 """Tests for field-building logic: falsy-check bug fixes and new writable field mappings.
 
 These test the field dict construction in create_issue/update_issue tool handlers.
 Since the field dict building happens inside nested tool functions, we test
 the logic patterns directly.
 """
-
-import pytest
 
 
 class TestFalsyCheckFixes:
@@ -77,12 +91,12 @@ class TestNewWritableFieldMappings:
     """Verify new field mapping patterns produce correct JIRA API format."""
 
     def test_qa_contact_mapping(self):
-        """qa_contact maps to {'name': username}."""
+        """qa_contact is set via user reference dict (accountId on Cloud)."""
         fields = {}
-        qa_contact = "rhn-support-ashafi"
+        qa_contact = "712020:76916d54-887a-4d7c-8898-6a4e91d98bb7"
         if qa_contact is not None:
-            fields['customfield_10470'] = {'name': qa_contact}
-        assert fields['customfield_10470'] == {'name': 'rhn-support-ashafi'}
+            fields['customfield_10470'] = {'accountId': qa_contact}
+        assert fields['customfield_10470'] == {'accountId': '712020:76916d54-887a-4d7c-8898-6a4e91d98bb7'}
 
     def test_epic_link_mapping(self):
         """epic_link maps to string value (parent link in cloud)."""
