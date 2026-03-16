@@ -70,6 +70,11 @@ def test_config_validation():
     with pytest.raises(ValueError, match="JIRA_ACCESS_TOKEN is required"):
         config.validate_required_fields()
     
-    # Should not raise when all fields are present
+    # Email is now always required
     config.access_token = "test"
+    with pytest.raises(ValueError, match="JIRA_EMAIL is required"):
+        config.validate_required_fields()
+
+    # Should not raise when all fields are present
+    config.email = "user@example.com"
     config.validate_required_fields()  # Should not raise

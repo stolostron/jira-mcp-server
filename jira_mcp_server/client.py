@@ -17,12 +17,15 @@
 """Jira client wrapper for MCP server."""
 
 import asyncio
+import logging
 from typing import List, Dict, Any, Optional
 from jira import JIRA
 from jira.exceptions import JIRAError
 from asyncio_throttle import Throttler
 
 from .config import JiraConfig
+
+logger = logging.getLogger(__name__)
 
 
 class JiraClient:
@@ -35,31 +38,18 @@ class JiraClient:
         self.throttler = Throttler(rate_limit=10, period=1.0)  # 10 requests per second
     
     async def connect(self) -> None:
-        """Connect to Jira server using appropriate authentication method.
-
-        For Jira Cloud (atlassian.net): Uses basic auth with email and API token
-        For self-hosted Jira: Uses personal access token authentication
-        """
+        """Connect to Jira Cloud using basic auth with email and API token."""
         try:
             options = {
                 'verify': self.config.verify_ssl,
                 'timeout': self.config.timeout
             }
 
-            if self.config.is_cloud():
-                # Jira Cloud requires basic auth with email and API token
-                self._jira = JIRA(
-                    server=self.config.server_url,
-                    basic_auth=(self.config.email, self.config.access_token),
-                    options=options
-                )
-            else:
-                # Self-hosted Jira uses personal access token
-                self._jira = JIRA(
-                    server=self.config.server_url,
-                    token_auth=self.config.access_token,
-                    options=options
-                )
+            self._jira = JIRA(
+                server=self.config.server_url,
+                basic_auth=(self.config.email, self.config.access_token),
+                options=options
+            )
 
             # Test connection
             await self._async_call(lambda: self._jira.myself())
@@ -374,35 +364,81 @@ class JiraClient:
             raise ValueError(f"Failed to get issue link types: {e}")
 
     async def search_users(self, query: str, max_results: int = 50) -> List[Dict[str, Any]]:
-        """Search for Jira users by name or email.
+        """Search for Jira Cloud users by name or email.
+
+        Uses the GDPR-compliant ``query`` parameter via a direct REST call
+        (the jira-python library sends ``?username=...`` which Jira Cloud
+        rejects in GDPR strict mode).
 
         Args:
-            query: Search query (name, email, or username - supports fuzzy matching)
+            query: Search query (display name or email - supports fuzzy matching)
             max_results: Maximum number of results to return (default: 50)
 
         Returns:
-            List of user dictionaries with key, name, displayName, and emailAddress
+            List of user dictionaries with account_id, name, display_name,
+            email_address, and active status.
         """
         if not self._jira:
             raise RuntimeError("Not connected to Jira")
 
-        try:
-            users = await self._async_call(
-                lambda: self._jira.search_users(query, maxResults=max_results)
+        url = (
+            f"{self._jira._options['server']}/rest/api/2/user/search"
+            f"?query={query}&maxResults={max_results}"
+        )
+        response = await self._async_call(lambda: self._jira._session.get(url))
+        if not response.ok:
+            raise ValueError(
+                f"User search failed (HTTP {response.status_code}): "
+                f"{response.text}"
+            )
+        return [
+            {
+                'account_id': u.get('accountId'),
+                'name': u.get('name'),
+                'display_name': u.get('displayName', ''),
+                'email_address': u.get('emailAddress'),
+                'active': u.get('active', True),
+            }
+            for u in response.json()
+        ]
+
+    async def resolve_assignee(self, value: str) -> Dict[str, str]:
+        """Resolve an assignee value to an ``{"accountId": "..."}`` payload.
+
+        The *value* may be a display name, an email address, or an accountId.
+        When a display name or email is given, a user search is performed to
+        look up the accountId.
+
+        Args:
+            value: Display name, email, or accountId of the target assignee.
+
+        Raises:
+            ValueError: If the user cannot be resolved unambiguously.
+        """
+        if ':' in value:
+            return {'accountId': value}
+
+        users = await self.search_users(value, max_results=50)
+        if not users:
+            raise ValueError(
+                f"No Jira user found matching '{value}'. "
+                "Provide an accountId, exact display name, or email address."
             )
 
-            return [
-                {
-                    'account_id': getattr(user, 'accountId', None),
-                    'name': getattr(user, 'name', None),
-                    'display_name': getattr(user, 'displayName', ''),
-                    'email_address': getattr(user, 'emailAddress', None),
-                    'active': getattr(user, 'active', True)
-                }
-                for user in users
-            ]
-        except JIRAError as e:
-            raise ValueError(f"Failed to search users: {e}")
+        exact = [
+            u for u in users
+            if (u.get('display_name') or '').lower() == value.lower()
+            or (u.get('email_address') or '').lower() == value.lower()
+        ]
+        match = exact[0] if exact else users[0]
+
+        account_id = match.get('account_id')
+        if not account_id:
+            raise ValueError(
+                f"User '{value}' was found but has no accountId. "
+                "This may indicate a service account or deactivated user."
+            )
+        return {'accountId': account_id}
 
     async def get_raw_issue_fields(self, issue_key: str) -> Dict[str, Any]:
         """Get all raw fields from a Jira issue for debugging purposes."""
@@ -747,8 +783,6 @@ class JiraClient:
                 'summary': issue.fields.parent.fields.summary,
                 'issue_type': issue.fields.parent.fields.issuetype.name
             } if getattr(issue.fields, 'parent', None) else None,
-            'parent_link': getattr(issue.fields, 'customfield_10014', None),  # Parent Link custom field
-            'epic_link': getattr(issue.fields, 'customfield_10014', None),  # Epic Link custom field
         }
 
         return result

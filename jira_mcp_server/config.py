@@ -74,18 +74,14 @@ class JiraConfig(BaseModel):
             component_aliases=component_aliases,
         )
 
-    def is_cloud(self) -> bool:
-        """Check if this is a Jira Cloud instance."""
-        return "atlassian.net" in self.server_url.lower()
-
     def validate_required_fields(self) -> None:
         """Validate that required fields are present."""
         if not self.server_url:
             raise ValueError("JIRA_SERVER_URL is required")
         if not self.access_token:
             raise ValueError("JIRA_ACCESS_TOKEN is required")
-        if self.is_cloud() and not self.email:
-            raise ValueError("JIRA_EMAIL is required for Jira Cloud instances")
+        if not self.email:
+            raise ValueError("JIRA_EMAIL is required")
     
     def get_team_members(self, team_name: str) -> List[str]:
         """Get members of a team by name.
