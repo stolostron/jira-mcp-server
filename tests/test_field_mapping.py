@@ -1,11 +1,30 @@
+# Copyright 2025 Red Hat, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# This file was developed with AI assistance.
+
 """Tests for field-building logic: falsy-check bug fixes and new writable field mappings.
 
 These test the field dict construction in create_issue/update_issue tool handlers.
 Since the field dict building happens inside nested tool functions, we test
-the logic patterns directly.
+the logic patterns directly.  Where possible, tests call the real production
+helpers (e.g., _user_ref) rather than re-building dicts inline.
 """
 
 import pytest
+
+from jira_mcp_server.server import _user_ref
 
 
 class TestFalsyCheckFixes:
@@ -77,20 +96,48 @@ class TestNewWritableFieldMappings:
     """Verify new field mapping patterns produce correct JIRA API format."""
 
     def test_qa_contact_mapping(self):
-        """qa_contact maps to {'name': username}."""
+        """qa_contact is set via _user_ref (accountId on Cloud)."""
         fields = {}
-        qa_contact = "rhn-support-ashafi"
+        qa_contact = "712020:76916d54-887a-4d7c-8898-6a4e91d98bb7"
         if qa_contact is not None:
-            fields['customfield_10470'] = {'name': qa_contact}
-        assert fields['customfield_10470'] == {'name': 'rhn-support-ashafi'}
+            fields['customfield_10470'] = _user_ref(qa_contact)
+        assert fields['customfield_10470'] == {'accountId': '712020:76916d54-887a-4d7c-8898-6a4e91d98bb7'}
 
-    def test_epic_link_mapping(self):
-        """epic_link maps to string value (parent link in cloud)."""
+    def test_contributors_mapping(self):
+        """contributors maps to list of _user_ref dicts."""
+        contributors = [
+            "712020:76916d54-887a-4d7c-8898-6a4e91d98bb7",
+            "61fa7a56f5f5b80070c78e2c",
+        ]
+        valid = [c.strip() for c in contributors if isinstance(c, str) and c.strip()]
         fields = {}
-        epic_link = "ACM-24035"
-        if epic_link is not None:
-            fields['customfield_10014'] = epic_link
-        assert fields['customfield_10014'] == "ACM-24035"
+        if valid:
+            fields['customfield_10466'] = [_user_ref(c) for c in valid]
+        assert len(fields['customfield_10466']) == 2
+        assert fields['customfield_10466'][0] == {'accountId': '712020:76916d54-887a-4d7c-8898-6a4e91d98bb7'}
+        assert fields['customfield_10466'][1] == {'accountId': '61fa7a56f5f5b80070c78e2c'}
+
+    def test_contributors_empty_strings_filtered(self):
+        """Empty/whitespace contributor strings are filtered out."""
+        contributors = ["valid-id", "  ", "", "another-id"]
+        valid = [c.strip() for c in contributors if isinstance(c, str) and c.strip()]
+        fields = {}
+        if valid:
+            fields['customfield_10466'] = [_user_ref(c) for c in valid]
+        assert len(fields['customfield_10466']) == 2
+
+    def test_user_ref_empty_raises(self):
+        """_user_ref raises ValueError for empty strings."""
+        with pytest.raises(ValueError):
+            _user_ref("")
+        with pytest.raises(ValueError):
+            _user_ref("   ")
+
+    def test_user_ref_accepts_opaque_ids(self):
+        """_user_ref accepts any non-empty string (Atlassian accountIds are opaque)."""
+        assert _user_ref("61fa7a56f5f5b80070c78e2c") == {'accountId': '61fa7a56f5f5b80070c78e2c'}
+        assert _user_ref("557057:abc") == {'accountId': '557057:abc'}
+        assert _user_ref("some-short-id") == {'accountId': 'some-short-id'}
 
     def test_severity_mapping(self):
         """severity maps to {'value': severity_name}."""
@@ -121,10 +168,10 @@ class TestNewWritableFieldMappings:
         fields = {}
         for field_val, field_key in [
             (None, 'customfield_10470'),
-            (None, 'customfield_10014'),
             (None, 'customfield_10840'),
             (None, 'versions'),
             (None, 'customfield_10718'),
+            (None, 'customfield_10466'),
         ]:
             if field_val is not None:
                 fields[field_key] = field_val

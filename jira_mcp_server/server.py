@@ -41,14 +41,15 @@ EARLY_STATUSES = {'new', 'backlog', 'in progress'}
 def _user_ref(identifier: str) -> Dict[str, str]:
     """Build a user reference dict for Jira Cloud.
 
-    Accepts either an accountId (contains ':') or a username/email,
-    and returns the appropriate dict format for the Jira REST API.
+    Only accountId is valid on Jira Cloud (name was deprecated for privacy).
+    Atlassian accountIds are opaque 1-128 character strings -- we accept any
+    non-empty value and let the Jira API reject truly invalid ones.
+    Use search_users to resolve a display name or email to an accountId first.
     """
-    if ':' in identifier or identifier.startswith('7') and len(identifier) > 30:
-        return {'accountId': identifier}
-    if '@' in identifier:
-        return {'accountId': identifier}
-    return {'name': identifier}
+    ident = identifier.strip() if isinstance(identifier, str) else ""
+    if not ident:
+        raise ValueError("User identifier cannot be empty")
+    return {'accountId': ident}
 
 
 def _validate_git_commit_sha(sha: str) -> None:
@@ -88,7 +89,7 @@ class IssueLinkResponse(BaseModel):
     type: str
     direction: str
     key: str
-    summary: str
+    summary: Optional[str] = None
 
 class IssueResponse(BaseModel):
     key: str
@@ -461,7 +462,9 @@ class JiraMCPServer:
             if epic_name:
                 fields['customfield_10011'] = epic_name
             if qa_contact is not None:
-                fields['customfield_10470'] = _user_ref(qa_contact)
+                qa_val = qa_contact.strip() if isinstance(qa_contact, str) else ""
+                if qa_val:
+                    fields['customfield_10470'] = _user_ref(qa_val)
             if severity is not None:
                 fields['customfield_10840'] = {'value': severity}
             if affects_versions is not None:
@@ -469,7 +472,9 @@ class JiraMCPServer:
             if acceptance_criteria is not None:
                 fields['customfield_10718'] = acceptance_criteria
             if contributors is not None:
-                fields['customfield_10466'] = [_user_ref(c) for c in contributors]
+                valid = [c.strip() for c in contributors if isinstance(c, str) and c.strip()]
+                if valid:
+                    fields['customfield_10466'] = [_user_ref(c) for c in valid]
 
             try:
                 issue = await self.client.create_issue(
@@ -610,7 +615,9 @@ class JiraMCPServer:
             if parent:
                 fields['parent'] = {'key': parent}
             if qa_contact is not None:
-                fields['customfield_10470'] = _user_ref(qa_contact)
+                qa_val = qa_contact.strip() if isinstance(qa_contact, str) else ""
+                if qa_val:
+                    fields['customfield_10470'] = _user_ref(qa_val)
             if severity is not None:
                 fields['customfield_10840'] = {'value': severity}
             if affects_versions is not None:
@@ -618,7 +625,9 @@ class JiraMCPServer:
             if acceptance_criteria is not None:
                 fields['customfield_10718'] = acceptance_criteria
             if contributors is not None:
-                fields['customfield_10466'] = [_user_ref(c) for c in contributors]
+                valid = [c.strip() for c in contributors if isinstance(c, str) and c.strip()]
+                if valid:
+                    fields['customfield_10466'] = [_user_ref(c) for c in valid]
 
             if not fields:
                 raise ValueError("At least one field must be provided to update an issue")
