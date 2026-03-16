@@ -723,16 +723,16 @@ class JiraClient:
             ],
             'url': f"{self.config.server_url}/browse/{issue.key}",
             'fix_versions': [version.name for version in getattr(issue.fields, 'fixVersions', [])],
-            'target_version': [v.name for v in getattr(issue.fields, 'customfield_12319940', []) or []],  # Target Version custom field
-            'work_type': self._extract_custom_field_value(getattr(issue.fields, 'customfield_12320040', None)),  # Work type custom field
+            'target_version': [v.name for v in getattr(issue.fields, 'customfield_10855', []) or []],  # Target Version custom field
+            'work_type': self._extract_custom_field_value(getattr(issue.fields, 'customfield_10464', None)),  # Activity Type (formerly Work Type)
             'security_level': getattr(issue.fields.security, 'name', None) if getattr(issue.fields, 'security', None) else None,
             'due_date': getattr(issue.fields, 'duedate', None),
-            'target_start': getattr(issue.fields, 'customfield_12313941', None),  # Target Start custom field
-            'target_end': getattr(issue.fields, 'customfield_12313942', None),  # Target End custom field
+            'target_start': getattr(issue.fields, 'customfield_10022', None),  # Target Start custom field
+            'target_end': getattr(issue.fields, 'customfield_10023', None),  # Target End custom field
             'original_estimate': self._seconds_to_time_string(getattr(issue.fields, 'timeoriginalestimate', None)),
-            'story_points': getattr(issue.fields, 'customfield_12310243', None),  # Story points custom field
-            'git_commit': self._extract_custom_field_value(getattr(issue.fields, 'customfield_12317372', None)),  # Git Commit custom field
-            'git_pull_requests': self._extract_git_pull_requests(getattr(issue.fields, 'customfield_12310220', None)),  # Git Pull Requests custom field
+            'story_points': getattr(issue.fields, 'customfield_10028', None),  # Story points custom field
+            'git_commit': self._extract_custom_field_value(getattr(issue.fields, 'customfield_10583', None)),  # Git Commit custom field
+            'git_pull_requests': self._extract_git_pull_requests(getattr(issue.fields, 'customfield_10875', None)),  # Git Pull Requests custom field
             'subtasks': [
                 {
                     'key': subtask.key,
@@ -747,8 +747,8 @@ class JiraClient:
                 'summary': issue.fields.parent.fields.summary,
                 'issue_type': issue.fields.parent.fields.issuetype.name
             } if getattr(issue.fields, 'parent', None) else None,
-            'parent_link': getattr(issue.fields, 'customfield_12313140', None),  # Parent Link custom field
-            'epic_link': getattr(issue.fields, 'customfield_12311140', None),  # Epic Link custom field
+            'parent_link': getattr(issue.fields, 'customfield_10014', None),  # Parent Link custom field
+            'epic_link': getattr(issue.fields, 'customfield_10014', None),  # Epic Link custom field
         }
 
         return result

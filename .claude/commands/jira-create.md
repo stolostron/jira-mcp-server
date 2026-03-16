@@ -48,12 +48,13 @@ Use `AskUserQuestion` to collect the remaining fields. Group questions logically
 
 **Work Type** (submit as ID number):
 - None = -1
-- Associate Wellness & Development = 46650
-- Future Sustainability = 48051
-- Incident & Support = 46651
-- Quality / Stability / Reliability = 46653
-- Security & Compliance = 46652
-- Product / Portfolio Work = 46654
+- Associate Wellness & Development = 10604
+- BU Features = 10605
+- Future Sustainability = 10606
+- Incidents & Support = 10607
+- Quality / Stability / Reliability = 10608
+- Security & Compliance = 10609
+- Product / Portfolio Work = 10610
 
 **Original Estimate** (e.g., '2h', '1d', '30m')
 
