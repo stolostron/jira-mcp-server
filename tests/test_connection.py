@@ -35,7 +35,7 @@ async def _run_jira_connection_check() -> None:
         print(f"   ✅ Configuration loaded successfully")
         print("   Server URL: [redacted]")
         print("   Email: [redacted]")
-        print(f"   Is Cloud: {config.is_cloud()}")
+        print(f"   Email configured: {bool(config.email)}")
         print()
     except Exception as e:
         print(f"   ❌ Failed to load configuration: {e}")
