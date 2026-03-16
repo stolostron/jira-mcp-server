@@ -377,30 +377,50 @@ class JiraClient:
         """Search for Jira users by name or email.
 
         Args:
-            query: Search query (name, email, or username - supports fuzzy matching)
+            query: Search query (name, email, or display name)
             max_results: Maximum number of results to return (default: 50)
 
         Returns:
-            List of user dictionaries with key, name, displayName, and emailAddress
+            List of user dictionaries with account_id, name, display_name, email_address, active
         """
         if not self._jira:
             raise RuntimeError("Not connected to Jira")
 
         try:
-            users = await self._async_call(
-                lambda: self._jira.search_users(query, maxResults=max_results)
-            )
-
-            return [
-                {
-                    'account_id': getattr(user, 'accountId', None),
-                    'name': getattr(user, 'name', None),
-                    'display_name': getattr(user, 'displayName', ''),
-                    'email_address': getattr(user, 'emailAddress', None),
-                    'active': getattr(user, 'active', True)
-                }
-                for user in users
-            ]
+            if self.config.is_cloud():
+                url = f"{self._jira._options['server']}/rest/api/3/user/search"
+                response = await self._async_call(
+                    lambda: self._jira._session.get(
+                        url, params={'query': query, 'maxResults': max_results}
+                    )
+                )
+                if not response.ok:
+                    raise ValueError(f"User search failed: HTTP {response.status_code}")
+                users_data = response.json()
+                return [
+                    {
+                        'account_id': u.get('accountId'),
+                        'name': u.get('name'),
+                        'display_name': u.get('displayName', ''),
+                        'email_address': u.get('emailAddress'),
+                        'active': u.get('active', True)
+                    }
+                    for u in users_data
+                ]
+            else:
+                users = await self._async_call(
+                    lambda: self._jira.search_users(query, maxResults=max_results)
+                )
+                return [
+                    {
+                        'account_id': getattr(user, 'accountId', None),
+                        'name': getattr(user, 'name', None),
+                        'display_name': getattr(user, 'displayName', ''),
+                        'email_address': getattr(user, 'emailAddress', None),
+                        'active': getattr(user, 'active', True)
+                    }
+                    for user in users
+                ]
         except JIRAError as e:
             raise ValueError(f"Failed to search users: {e}")
 
@@ -694,6 +714,33 @@ class JiraClient:
         
         return " ".join(parts)
     
+    def _parse_issue_links(self, links) -> List[Dict[str, Any]]:
+        """Parse issue links into structured format."""
+        result = []
+        for link in links or []:
+            try:
+                link_type = getattr(getattr(link, 'type', None), 'name', 'unknown')
+                outward = getattr(link, 'outwardIssue', None)
+                inward = getattr(link, 'inwardIssue', None)
+                target = outward or inward
+                if not target:
+                    continue
+
+                key = getattr(target, 'key', None)
+                if not key:
+                    continue
+
+                summary = getattr(getattr(target, 'fields', None), 'summary', None)
+                result.append({
+                    'type': link_type,
+                    'direction': 'outward' if outward else 'inward',
+                    'key': key,
+                    'summary': summary,
+                })
+            except Exception:
+                continue
+        return result
+
     def _issue_to_dict(self, issue) -> Dict[str, Any]:
         """Convert Jira issue object to dictionary."""
         result = {
@@ -749,6 +796,60 @@ class JiraClient:
             } if getattr(issue.fields, 'parent', None) else None,
             'parent_link': getattr(issue.fields, 'customfield_10014', None),  # Parent Link custom field
             'epic_link': getattr(issue.fields, 'customfield_10014', None),  # Epic Link custom field
+            'sprint': self._extract_sprint(getattr(issue.fields, 'customfield_10020', None)),
+            'qa_contact': self._extract_user_display_name(getattr(issue.fields, 'customfield_10470', None)),
+            'severity': self._extract_custom_field_value(getattr(issue.fields, 'customfield_10840', None)),
+            'affects_versions': [v.name for v in getattr(issue.fields, 'versions', []) or []],
+            'acceptance_criteria': getattr(issue.fields, 'customfield_10718', None),
+            'contributors': self._extract_user_list(getattr(issue.fields, 'customfield_10466', None)),
+            'issue_links': self._parse_issue_links(getattr(issue.fields, 'issuelinks', []) or []),
+            'attachments': [a.filename for a in getattr(issue.fields, 'attachment', []) or []],
         }
 
+        return result
+
+    @staticmethod
+    def _extract_sprint(sprint_data) -> Optional[str]:
+        """Extract sprint name from Jira Cloud sprint field.
+
+        The field may be: a list of sprint objects (with .name), a list of
+        strings, a single object, or None.  Returns the name of the last
+        (most recent) sprint.
+        """
+        if not sprint_data:
+            return None
+        items = sprint_data if isinstance(sprint_data, list) else [sprint_data]
+        if not items:
+            return None
+        last = items[-1]
+        if hasattr(last, 'name'):
+            return last.name
+        return str(last) if last else None
+
+    @staticmethod
+    def _extract_user_display_name(field_value) -> Optional[str]:
+        """Extract display name from a user-type field (may be object or string)."""
+        if field_value is None:
+            return None
+        if hasattr(field_value, 'displayName'):
+            return field_value.displayName
+        return str(field_value) if field_value else None
+
+    @staticmethod
+    def _extract_user_list(field_value) -> List[str]:
+        """Extract list of display names from a multi-user field (may be strings or objects)."""
+        if not field_value:
+            return []
+        if isinstance(field_value, str):
+            field_value = [field_value]
+        elif not isinstance(field_value, (list, tuple)):
+            field_value = [field_value]
+        result = []
+        for item in field_value:
+            if hasattr(item, 'displayName'):
+                result.append(item.displayName)
+            elif isinstance(item, str):
+                result.append(item)
+            else:
+                result.append(str(item))
         return result
