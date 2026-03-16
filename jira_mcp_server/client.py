@@ -792,6 +792,38 @@ class JiraClient:
 
         return " ".join(parts)
 
+    def _parse_issue_links(self, links) -> List[Dict[str, Any]]:
+        """Parse issue links into structured format."""
+        result = []
+        for link in links or []:
+            try:
+                link_type = getattr(getattr(link, "type", None), "name", "unknown")
+                outward = getattr(link, "outwardIssue", None)
+                inward = getattr(link, "inwardIssue", None)
+                target = outward or inward
+                if not target:
+                    continue
+
+                key = getattr(target, "key", None)
+                if not key:
+                    continue
+
+                summary = getattr(
+                    getattr(target, "fields", None), "summary", None
+                )
+                result.append({
+                    "type": link_type,
+                    "direction": "outward" if outward else "inward",
+                    "key": key,
+                    "summary": summary,
+                })
+            except (AttributeError, KeyError, TypeError):
+                logger.debug(
+                    "Skipping malformed issue link %r", link, exc_info=True
+                )
+                continue
+        return result
+
     def _issue_to_dict(self, issue) -> Dict[str, Any]:
         """Convert Jira issue object to dictionary."""
         result = {
@@ -840,10 +872,10 @@ class JiraClient:
             ],
             "target_version": [
                 v.name for v in getattr(issue.fields, "customfield_10855", []) or []
-            ],  # Target Version custom field
+            ],
             "work_type": self._extract_custom_field_value(
                 getattr(issue.fields, "customfield_10464", None)
-            ),  # Activity Type (formerly Work Type)
+            ),
             "security_level": (
                 getattr(issue.fields.security, "name", None)
                 if getattr(issue.fields, "security", None)
@@ -852,22 +884,22 @@ class JiraClient:
             "due_date": getattr(issue.fields, "duedate", None),
             "target_start": getattr(
                 issue.fields, "customfield_10022", None
-            ),  # Target Start custom field
+            ),
             "target_end": getattr(
                 issue.fields, "customfield_10023", None
-            ),  # Target End custom field
+            ),
             "original_estimate": self._seconds_to_time_string(
                 getattr(issue.fields, "timeoriginalestimate", None)
             ),
             "story_points": getattr(
                 issue.fields, "customfield_10028", None
-            ),  # Story points custom field
+            ),
             "git_commit": self._extract_custom_field_value(
                 getattr(issue.fields, "customfield_10583", None)
-            ),  # Git Commit custom field
+            ),
             "git_pull_requests": self._extract_git_pull_requests(
                 getattr(issue.fields, "customfield_10875", None)
-            ),  # Git Pull Requests custom field
+            ),
             "subtasks": [
                 {
                     "key": subtask.key,
@@ -886,6 +918,77 @@ class JiraClient:
                 if getattr(issue.fields, "parent", None)
                 else None
             ),
+            "sprint": self._extract_sprint(
+                getattr(issue.fields, "customfield_10020", None)
+            ),
+            "qa_contact": self._extract_user_display_name(
+                getattr(issue.fields, "customfield_10470", None)
+            ),
+            "severity": self._extract_custom_field_value(
+                getattr(issue.fields, "customfield_10840", None)
+            ),
+            "affects_versions": [
+                v.name for v in getattr(issue.fields, "versions", []) or []
+            ],
+            "acceptance_criteria": getattr(
+                issue.fields, "customfield_10718", None
+            ),
+            "contributors": self._extract_user_list(
+                getattr(issue.fields, "customfield_10466", None)
+            ),
+            "issue_links": self._parse_issue_links(
+                getattr(issue.fields, "issuelinks", []) or []
+            ),
+            "attachments": [
+                a.filename
+                for a in getattr(issue.fields, "attachment", []) or []
+            ],
         }
 
+        return result
+
+    @staticmethod
+    def _extract_sprint(sprint_data) -> Optional[str]:
+        """Extract sprint name from Jira Cloud sprint field.
+
+        The field may be: a list of sprint objects (with .name), a list of
+        strings, a single object, or None.  Returns the name of the last
+        (most recent) sprint.
+        """
+        if not sprint_data:
+            return None
+        items = sprint_data if isinstance(sprint_data, list) else [sprint_data]
+        if not items:
+            return None
+        last = items[-1]
+        if hasattr(last, "name"):
+            return last.name
+        return str(last) if last else None
+
+    @staticmethod
+    def _extract_user_display_name(field_value) -> Optional[str]:
+        """Extract display name from a user-type field (may be object or string)."""
+        if field_value is None:
+            return None
+        if hasattr(field_value, "displayName"):
+            return field_value.displayName
+        return str(field_value) if field_value else None
+
+    @staticmethod
+    def _extract_user_list(field_value) -> List[str]:
+        """Extract list of display names from a multi-user field (may be strings or objects)."""
+        if not field_value:
+            return []
+        if isinstance(field_value, str):
+            field_value = [field_value]
+        elif not isinstance(field_value, (list, tuple)):
+            field_value = [field_value]
+        result = []
+        for item in field_value:
+            if hasattr(item, "displayName"):
+                result.append(item.displayName)
+            elif isinstance(item, str):
+                result.append(item)
+            else:
+                result.append(str(item))
         return result
