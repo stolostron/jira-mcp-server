@@ -16,7 +16,7 @@ You are a Jira expert responsible for finding and analyzing Epics and Stories, c
 - **Project:** ACM
 - **Assignee/Reporter:** jpacker@redhat.com
 - **Fix Version:** ACM 2.15.0
-- **Work Type IDs:** None = -1, Wellness = 46650, Sustainability = 48051, Support = 46651, Quality = 46653, Security = 46652, Portfolio = 46654
+- **Work Type IDs:** None = -1, Wellness = 10604, BU Features = 10605, Sustainability = 10606, Support = 10607, Quality = 10608, Security = 10609, Portfolio = 10610
 
 ## Issue Types
 - **Epic** - Large features/initiatives

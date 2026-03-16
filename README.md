@@ -2,6 +2,28 @@
 
 A Model Context Protocol (MCP) server that provides seamless integration with Jira instances. This server enables AI applications to interact with Jira issues, projects, and workflows through a standardized interface.
 
+## Jira Cloud Migration
+
+The server has been updated to work with the new Jira Cloud instance. To migrate:
+
+1. **Pull the latest changes**
+```bash
+cd /path/to/jira-mcp-server && git pull
+```
+
+2. **Update your `.env` file**
+```env
+JIRA_SERVER_URL=https://redhat.atlassian.net
+JIRA_ACCESS_TOKEN=<your-api-token>
+JIRA_EMAIL=<your-email>@redhat.com
+```
+
+3. **Get your API token** — Go to https://id.atlassian.com/manage-profile/security/api-tokens and click "Create API token"
+
+4. **Reconnect** — In Claude Code run `/mcp` to reconnect, or restart your client (Cursor, Gemini CLI, etc.)
+
+All custom field IDs and work type IDs have been updated in the code. No other changes needed.
+
 ## Table of Contents
 
 1. [Features](#features)
@@ -65,6 +87,7 @@ cp .env.example .env
 ```env
 JIRA_SERVER_URL=https://your-company.atlassian.net
 JIRA_ACCESS_TOKEN=your-personal-access-token
+JIRA_EMAIL=your-email@company.com
 JIRA_VERIFY_SSL=true
 JIRA_TIMEOUT=30
 JIRA_MAX_RESULTS=100
@@ -85,9 +108,11 @@ For Jira Cloud (Atlassian Cloud), you'll need to:
 1. Create a personal access token:
    - Go to https://id.atlassian.com/manage-profile/security/api-tokens
    - Click "Create API token"
-   - Use the access token as the JIRA_ACCESS_TOKEN
+   - Use the access token as the `JIRA_ACCESS_TOKEN`
 
-2. Use your full Atlassian domain (e.g., `https://yourcompany.atlassian.net`)
+2. Set `JIRA_EMAIL` to the email address associated with your Atlassian account (required for Cloud authentication)
+
+3. Use your full Atlassian domain (e.g., `https://yourcompany.atlassian.net`)
 
 ### Jira Server/Data Center Setup
 
@@ -648,6 +673,7 @@ jira_mcp_server/
 
 **Solutions**:
 - Verify Jira credentials in the `.env` file
+- For Jira Cloud: ensure `JIRA_EMAIL` is set to your Atlassian account email
 - Check if the Jira server URL is correct
 - Ensure the personal access token is valid
 - Test credentials with a simple Jira API call
@@ -707,6 +733,7 @@ You can override any configuration by setting environment variables:
 
 ```bash
 export JIRA_SERVER_URL="https://custom-jira.company.com"
+export JIRA_EMAIL="your-email@company.com"
 export JIRA_TIMEOUT="60"
 export JIRA_MAX_RESULTS="200"
 export JIRA_TEAMS='{"frontend": ["alice", "bob"], "backend": ["charlie"]}'
@@ -866,7 +893,8 @@ To connect to multiple Jira instances, create separate MCP server configurations
       "cwd": "/home/user/workspace_git/jira-mcp-server",
       "env": {
         "JIRA_SERVER_URL": "https://prod.atlassian.net",
-        "JIRA_ACCESS_TOKEN": "prod-token"
+        "JIRA_ACCESS_TOKEN": "prod-token",
+        "JIRA_EMAIL": "you@company.com"
       }
     },
     "jira-staging": {
@@ -874,8 +902,9 @@ To connect to multiple Jira instances, create separate MCP server configurations
       "args": ["-m", "jira_mcp_server.main"],
       "cwd": "/home/user/workspace_git/jira-mcp-server",
       "env": {
-        "JIRA_SERVER_URL": "https://staging.atlassian.net",
-        "JIRA_ACCESS_TOKEN": "staging-token"
+        "JIRA_SERVER_URL": "https://company.atlassian.net",
+        "JIRA_ACCESS_TOKEN": "cloud-token",
+        "JIRA_EMAIL": "you@company.com"
       }
     }
   }

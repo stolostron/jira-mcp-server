@@ -347,12 +347,13 @@ class JiraMCPServer:
                 target_version: List of target version names (set when issue is created)
                 work_type: Work type for the issue (STRONGLY RECOMMENDED). Available options:
                     - **None** = -1
-                    - **Associate Wellness & Development** = 46650
-                    - **Future Sustainability** = 48051
-                    - **Incident & Support** = 46651
-                    - **Quality / Stability / Reliability** = 46653
-                    - **Security & Compliance** = 46652
-                    - **Product / Portfolio Work** = 46654
+                    - **Associate Wellness & Development** = 10604
+                    - **BU Features** = 10605
+                    - **Future Sustainability** = 10606
+                    - **Incidents & Support** = 10607
+                    - **Quality / Stability / Reliability** = 10608
+                    - **Security & Compliance** = 10609
+                    - **Product / Portfolio Work** = 10610
                 security_level: Security level name
                 due_date: Due date in YYYY-MM-DD format
                 target_start: Target start date in YYYY-MM-DD format
@@ -400,17 +401,17 @@ class JiraMCPServer:
                 fields['fixVersions'] = [{'name': version} for version in fix_versions]
             if target_version:
                 # Target versions need to be converted to objects with 'name' property
-                fields['customfield_12319940'] = [{'name': version} for version in target_version]
+                fields['customfield_10855'] = [{'name': version} for version in target_version]
             if work_type:
-                fields['customfield_12320040'] = {'id': str(work_type)}  # Work type custom field
+                fields['customfield_10464'] = {'id': str(work_type)}  # Activity Type (formerly Work Type)
             if security_level:
                 fields['security'] = {'name': security_level}
             if due_date:
                 fields['duedate'] = due_date
             if target_start:
-                fields['customfield_12313941'] = target_start  # Target Start custom field
+                fields['customfield_10022'] = target_start  # Target Start custom field
             if target_end:
-                fields['customfield_12313942'] = target_end  # Target End custom field
+                fields['customfield_10023'] = target_end  # Target End custom field
             if components:
                 # Resolve component aliases to actual component names
                 resolved_components = self.config.resolve_component_names(components)
@@ -419,20 +420,20 @@ class JiraMCPServer:
             if original_estimate:
                 fields['timetracking'] = {'originalEstimate': original_estimate}
             if story_points is not None:
-                fields['customfield_12310243'] = story_points  # Story points custom field
+                fields['customfield_10028'] = story_points  # Story points custom field
             if git_commit:
                 _validate_git_commit_sha(git_commit)
-                fields['customfield_12317372'] = git_commit  # Git Commit custom field
+                fields['customfield_10583'] = git_commit  # Git Commit custom field
             if git_pull_requests:
-                fields['customfield_12310220'] = git_pull_requests  # Git Pull Requests custom field
+                fields['customfield_10875'] = git_pull_requests  # Git Pull Requests custom field
             if parent:
                 fields['parent'] = {'key': parent}  # Parent issue for sub-tasks
             if epic_name:
-                fields['customfield_12311141'] = epic_name  # Epic Name custom field
+                fields['customfield_10011'] = epic_name  # Epic Name custom field
             if parent_link:
-                fields['customfield_12313140'] = parent_link  # Parent Link custom field
+                fields['customfield_10014'] = parent_link  # Parent Link custom field
             if epic_link:
-                fields['customfield_12311140'] = epic_link  # Epic Link custom field
+                fields['customfield_10014'] = epic_link  # Epic Link custom field
 
             try:
                 issue = await self.client.create_issue(
@@ -495,12 +496,13 @@ class JiraMCPServer:
                 target_version: List of target version names (set when issue is created)
                 work_type: Work type for the issue (STRONGLY RECOMMENDED). Available options:
                     - **None** = -1
-                    - **Associate Wellness & Development** = 46650
-                    - **Future Sustainability** = 48051
-                    - **Incident & Support** = 46651
-                    - **Quality / Stability / Reliability** = 46653
-                    - **Security & Compliance** = 46652
-                    - **Product / Portfolio Work** = 46654
+                    - **Associate Wellness & Development** = 10604
+                    - **BU Features** = 10605
+                    - **Future Sustainability** = 10606
+                    - **Incidents & Support** = 10607
+                    - **Quality / Stability / Reliability** = 10608
+                    - **Security & Compliance** = 10609
+                    - **Product / Portfolio Work** = 10610
                 security_level: Security level name
                 due_date: Due date in YYYY-MM-DD format
                 target_start: Target start date in YYYY-MM-DD format
@@ -537,17 +539,17 @@ class JiraMCPServer:
                 fields['fixVersions'] = [{'name': version} for version in fix_versions]
             if target_version:
                 # Target versions need to be converted to objects with 'name' property
-                fields['customfield_12319940'] = [{'name': version} for version in target_version]
+                fields['customfield_10855'] = [{'name': version} for version in target_version]
             if work_type:
-                fields['customfield_12320040'] = {'id': str(work_type)}  # Work type custom field
+                fields['customfield_10464'] = {'id': str(work_type)}  # Activity Type (formerly Work Type)
             if security_level:
                 fields['security'] = {'name': security_level}
             if due_date:
                 fields['duedate'] = due_date
             if target_start:
-                fields['customfield_12313941'] = target_start  # Target Start custom field
+                fields['customfield_10022'] = target_start  # Target Start custom field
             if target_end:
-                fields['customfield_12313942'] = target_end  # Target End custom field
+                fields['customfield_10023'] = target_end  # Target End custom field
             if components:
                 # Resolve component aliases to actual component names
                 resolved_components = self.config.resolve_component_names(components)
@@ -556,16 +558,16 @@ class JiraMCPServer:
             if original_estimate:
                 fields['timetracking'] = {'originalEstimate': original_estimate}
             if story_points is not None:
-                fields['customfield_12310243'] = story_points  # Story points custom field
+                fields['customfield_10028'] = story_points  # Story points custom field
             if git_commit:
                 _validate_git_commit_sha(git_commit)
-                fields['customfield_12317372'] = git_commit  # Git Commit custom field
+                fields['customfield_10583'] = git_commit  # Git Commit custom field
             if git_pull_requests:
-                fields['customfield_12310220'] = git_pull_requests  # Git Pull Requests custom field
+                fields['customfield_10875'] = git_pull_requests  # Git Pull Requests custom field
             if parent_link:
-                fields['customfield_12313140'] = parent_link  # Parent Link custom field
+                fields['customfield_10014'] = parent_link  # Parent Link custom field
             if epic_link:
-                fields['customfield_12311140'] = epic_link  # Epic Link custom field
+                fields['customfield_10014'] = epic_link  # Epic Link custom field
 
             if not fields:
                 raise ValueError("At least one field must be provided to update an issue")
@@ -594,7 +596,7 @@ class JiraMCPServer:
             Args:
                 issue_key: Jira issue key (e.g., 'PROJ-123')
                 field_name: The Jira field ID to clear (e.g., 'fixVersions',
-                    'customfield_12319940', 'duedate', 'labels', 'components',
+                    'customfield_10855', 'duedate', 'labels', 'components',
                     'assignee', 'priority', 'security', 'timetracking').
                     Use the debug_issue_fields tool to discover available field IDs.
                 ctx: MCP context for progress reporting
