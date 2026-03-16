@@ -42,14 +42,15 @@ EARLY_STATUSES = {"new", "backlog", "in progress"}
 def _user_ref(identifier: str) -> Dict[str, str]:
     """Build a user reference dict for Jira Cloud.
 
-    Accepts either an accountId (contains ':') or a username/email,
-    and returns the appropriate dict format for the Jira REST API.
+    Only accountId is valid on Jira Cloud (name was deprecated for privacy).
+    Atlassian accountIds are opaque 1-128 character strings -- we accept any
+    non-empty value and let the Jira API reject truly invalid ones.
+    Use search_users to resolve a display name or email to an accountId first.
     """
-    if ':' in identifier or identifier.startswith('7') and len(identifier) > 30:
-        return {'accountId': identifier}
-    if '@' in identifier:
-        return {'accountId': identifier}
-    return {'name': identifier}
+    ident = identifier.strip() if isinstance(identifier, str) else ""
+    if not ident:
+        raise ValueError("User identifier cannot be empty")
+    return {'accountId': ident}
 
 
 def _validate_git_commit_sha(sha: str) -> None:
