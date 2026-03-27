@@ -38,6 +38,20 @@ logger = logging.getLogger(__name__)
 EARLY_STATUSES = {'new', 'backlog', 'in progress'}
 
 
+def _user_ref(identifier: str) -> Dict[str, str]:
+    """Build a user reference dict for Jira Cloud.
+
+    Only accountId is valid on Jira Cloud (name was deprecated for privacy).
+    Atlassian accountIds are opaque 1-128 character strings -- we accept any
+    non-empty value and let the Jira API reject truly invalid ones.
+    Use search_users to resolve a display name or email to an accountId first.
+    """
+    ident = identifier.strip() if isinstance(identifier, str) else ""
+    if not ident:
+        raise ValueError("User identifier cannot be empty")
+    return {'accountId': ident}
+
+
 def _validate_git_commit_sha(sha: str) -> None:
     """Validate that a git commit SHA is either 40 characters (SHA-1) or 64 characters (SHA-256).
 
@@ -71,6 +85,12 @@ class ParentResponse(BaseModel):
     summary: str
     issue_type: str
 
+class IssueLinkResponse(BaseModel):
+    type: str
+    direction: str
+    key: str
+    summary: Optional[str] = None
+
 class IssueResponse(BaseModel):
     key: str
     summary: str
@@ -101,6 +121,14 @@ class IssueResponse(BaseModel):
     git_pull_requests: Optional[str]
     subtasks: List[SubtaskResponse]
     parent: Optional[ParentResponse]
+    sprint: Optional[str] = None
+    qa_contact: Optional[str] = None
+    severity: Optional[str] = None
+    affects_versions: List[str] = []
+    acceptance_criteria: Optional[str] = None
+    contributors: List[str] = []
+    issue_links: List[IssueLinkResponse] = []
+    attachments: List[str] = []
 
 class ProjectResponse(BaseModel):
     key: str
@@ -323,6 +351,11 @@ class JiraMCPServer:
             git_pull_requests: Optional[str] = None,
             parent: Optional[str] = None,
             epic_name: Optional[str] = None,
+            qa_contact: Optional[str] = None,
+            severity: Optional[str] = None,
+            affects_versions: Optional[List[str]] = None,
+            acceptance_criteria: Optional[str] = None,
+            contributors: Optional[List[str]] = None,
             ctx: Optional[Context] = None
         ) -> IssueResponse:
             """Create a new Jira issue.
@@ -363,6 +396,11 @@ class JiraMCPServer:
                     for all hierarchy levels: Story to Epic, Epic to Feature,
                     sub-tasks, etc.
                 epic_name: Epic Name (required for Epic issue type)
+                qa_contact: QA Contact accountId (use search_users to find accountId first)
+                severity: Severity value (e.g., 'Important', 'Critical', 'Major', 'Moderate', 'Low')
+                affects_versions: List of affected version names (e.g., ['ACM 2.16.0'])
+                acceptance_criteria: Acceptance criteria text
+                contributors: List of contributor accountIds (use search_users to find accountIds first)
                 ctx: MCP context for progress reporting
             """
             # Validate required fields
@@ -423,6 +461,20 @@ class JiraMCPServer:
                 fields['parent'] = {'key': parent}
             if epic_name:
                 fields['customfield_10011'] = epic_name
+            if qa_contact is not None:
+                qa_val = qa_contact.strip() if isinstance(qa_contact, str) else ""
+                if qa_val:
+                    fields['customfield_10470'] = _user_ref(qa_val)
+            if severity is not None:
+                fields['customfield_10840'] = {'value': severity}
+            if affects_versions is not None:
+                fields['versions'] = [{'name': v} for v in affects_versions]
+            if acceptance_criteria is not None:
+                fields['customfield_10718'] = acceptance_criteria
+            if contributors is not None:
+                valid = [c.strip() for c in contributors if isinstance(c, str) and c.strip()]
+                if valid:
+                    fields['customfield_10466'] = [_user_ref(c) for c in valid]
 
             try:
                 issue = await self.client.create_issue(
@@ -469,6 +521,11 @@ class JiraMCPServer:
             git_commit: Optional[str] = None,
             git_pull_requests: Optional[str] = None,
             parent: Optional[str] = None,
+            qa_contact: Optional[str] = None,
+            severity: Optional[str] = None,
+            affects_versions: Optional[List[str]] = None,
+            acceptance_criteria: Optional[str] = None,
+            contributors: Optional[List[str]] = None,
             ctx: Optional[Context] = None
         ) -> IssueResponse:
             """Update an existing Jira issue.
@@ -503,6 +560,11 @@ class JiraMCPServer:
                 parent: Parent issue key for hierarchy (e.g., 'PROJ-123'). Works
                     for all hierarchy levels: Story to Epic, Epic to Feature,
                     sub-tasks, etc.
+                qa_contact: QA Contact accountId (use search_users to find accountId first)
+                severity: Severity value (e.g., 'Important', 'Critical', 'Major', 'Moderate', 'Low')
+                affects_versions: List of affected version names (e.g., ['ACM 2.16.0'])
+                acceptance_criteria: Acceptance criteria text
+                contributors: List of contributor accountIds (use search_users to find accountIds first)
                 ctx: MCP context for progress reporting
             """
             if ctx:
@@ -552,6 +614,20 @@ class JiraMCPServer:
                 fields['customfield_10875'] = git_pull_requests  # Git Pull Requests custom field
             if parent:
                 fields['parent'] = {'key': parent}
+            if qa_contact is not None:
+                qa_val = qa_contact.strip() if isinstance(qa_contact, str) else ""
+                if qa_val:
+                    fields['customfield_10470'] = _user_ref(qa_val)
+            if severity is not None:
+                fields['customfield_10840'] = {'value': severity}
+            if affects_versions is not None:
+                fields['versions'] = [{'name': v} for v in affects_versions]
+            if acceptance_criteria is not None:
+                fields['customfield_10718'] = acceptance_criteria
+            if contributors is not None:
+                valid = [c.strip() for c in contributors if isinstance(c, str) and c.strip()]
+                if valid:
+                    fields['customfield_10466'] = [_user_ref(c) for c in valid]
 
             if not fields:
                 raise ValueError("At least one field must be provided to update an issue")
