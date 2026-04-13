@@ -36,25 +36,25 @@ def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Jira MCP Server")
     parser.add_argument(
-        "--transport", 
-        choices=["stdio", "sse"], 
+        "--transport",
+        choices=["stdio", "sse"],
         default="stdio",
-        help="Transport type to use (default: stdio)"
+        help="Transport type to use (default: stdio)",
     )
     parser.add_argument(
-        "--host", 
+        "--host",
         default="127.0.0.1",
-        help="Host to bind to for SSE transport (default: 127.0.0.1)"
+        help="Host to bind to for SSE transport (default: 127.0.0.1)",
     )
     parser.add_argument(
-        "--port", 
-        type=int, 
+        "--port",
+        type=int,
         default=8000,
-        help="Port to bind to for SSE transport (default: 8000)"
+        help="Port to bind to for SSE transport (default: 8000)",
     )
-    
+
     args = parser.parse_args()
-    
+
     try:
         if args.transport == "sse":
             # Initialize server and run with SSE transport
@@ -63,7 +63,7 @@ def main() -> None:
         else:
             # Initialize the server asynchronously for stdio transport
             server = asyncio.run(main_async())
-            
+
             # Run the MCP server (this is synchronous and manages its own event loop)
             server.mcp.run()
     except KeyboardInterrupt:
