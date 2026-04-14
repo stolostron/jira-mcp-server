@@ -23,10 +23,10 @@ import pytest
 from jira_mcp_server.client import JiraClient
 from jira_mcp_server.config import JiraConfig
 
-
 # ---------------------------------------------------------------------------
 # Reusable fakes
 # ---------------------------------------------------------------------------
+
 
 class FakeResponse:
     """Minimal stand-in for a ``requests.Response``."""
@@ -93,21 +93,24 @@ def _make_client(fake_jira: FakeJira | None = None) -> JiraClient:
 # search_users
 # ---------------------------------------------------------------------------
 
+
 class TestSearchUsers:
     @pytest.fixture
     def client(self):
         fake = FakeJira()
         fake._session.register(
             "/rest/api/2/user/search",
-            FakeResponse([
-                {
-                    "accountId": "abc:123",
-                    "name": None,
-                    "displayName": "Alice A",
-                    "emailAddress": "alice@redhat.com",
-                    "active": True,
-                },
-            ]),
+            FakeResponse(
+                [
+                    {
+                        "accountId": "abc:123",
+                        "name": None,
+                        "displayName": "Alice A",
+                        "emailAddress": "alice@redhat.com",
+                        "active": True,
+                    },
+                ]
+            ),
         )
         return _make_client(fake_jira=fake)
 
@@ -140,6 +143,7 @@ class TestSearchUsers:
 # resolve_assignee
 # ---------------------------------------------------------------------------
 
+
 class TestResolveAssignee:
     @pytest.mark.asyncio
     async def test_account_id_passthrough(self):
@@ -152,15 +156,17 @@ class TestResolveAssignee:
         fake = FakeJira()
         fake._session.register(
             "/rest/api/2/user/search",
-            FakeResponse([
-                {
-                    "accountId": "abc:999",
-                    "name": None,
-                    "displayName": "Alice A",
-                    "emailAddress": "alice@redhat.com",
-                    "active": True,
-                },
-            ]),
+            FakeResponse(
+                [
+                    {
+                        "accountId": "abc:999",
+                        "name": None,
+                        "displayName": "Alice A",
+                        "emailAddress": "alice@redhat.com",
+                        "active": True,
+                    },
+                ]
+            ),
         )
         client = _make_client(fake_jira=fake)
 
@@ -172,15 +178,17 @@ class TestResolveAssignee:
         fake = FakeJira()
         fake._session.register(
             "/rest/api/2/user/search",
-            FakeResponse([
-                {
-                    "accountId": "abc:888",
-                    "name": None,
-                    "displayName": "Bob B",
-                    "emailAddress": "bob@redhat.com",
-                    "active": True,
-                },
-            ]),
+            FakeResponse(
+                [
+                    {
+                        "accountId": "abc:888",
+                        "name": None,
+                        "displayName": "Bob B",
+                        "emailAddress": "bob@redhat.com",
+                        "active": True,
+                    },
+                ]
+            ),
         )
         client = _make_client(fake_jira=fake)
 
@@ -204,22 +212,24 @@ class TestResolveAssignee:
         fake = FakeJira()
         fake._session.register(
             "/rest/api/2/user/search",
-            FakeResponse([
-                {
-                    "accountId": "abc:wrong",
-                    "name": None,
-                    "displayName": "Alice Wonderland",
-                    "emailAddress": "alice.w@redhat.com",
-                    "active": True,
-                },
-                {
-                    "accountId": "abc:right",
-                    "name": None,
-                    "displayName": "Alice",
-                    "emailAddress": "alice@redhat.com",
-                    "active": True,
-                },
-            ]),
+            FakeResponse(
+                [
+                    {
+                        "accountId": "abc:wrong",
+                        "name": None,
+                        "displayName": "Alice Wonderland",
+                        "emailAddress": "alice.w@redhat.com",
+                        "active": True,
+                    },
+                    {
+                        "accountId": "abc:right",
+                        "name": None,
+                        "displayName": "Alice",
+                        "emailAddress": "alice@redhat.com",
+                        "active": True,
+                    },
+                ]
+            ),
         )
         client = _make_client(fake_jira=fake)
 
@@ -231,15 +241,17 @@ class TestResolveAssignee:
         fake = FakeJira()
         fake._session.register(
             "/rest/api/2/user/search",
-            FakeResponse([
-                {
-                    "accountId": None,
-                    "name": None,
-                    "displayName": "Ghost User",
-                    "emailAddress": "ghost@redhat.com",
-                    "active": False,
-                },
-            ]),
+            FakeResponse(
+                [
+                    {
+                        "accountId": None,
+                        "name": None,
+                        "displayName": "Ghost User",
+                        "emailAddress": "ghost@redhat.com",
+                        "active": False,
+                    },
+                ]
+            ),
         )
         client = _make_client(fake_jira=fake)
 

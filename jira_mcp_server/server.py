@@ -116,6 +116,7 @@ class ProjectResponse(BaseModel):
     description: str
     lead: str
 
+
 class VersionResponse(BaseModel):
     id: str
     name: str
@@ -123,6 +124,7 @@ class VersionResponse(BaseModel):
     released: bool
     archived: bool
     release_date: Optional[str]
+
 
 class ComponentResponse(BaseModel):
     id: str
@@ -814,8 +816,7 @@ class JiraMCPServer:
 
         @self.mcp.tool()
         async def get_project_versions(
-            project_key: str,
-            ctx: Optional[Context] = None
+            project_key: str, ctx: Optional[Context] = None
         ) -> List[VersionResponse]:
             """Get all versions available in a specific Jira project.
 
@@ -831,11 +832,15 @@ class JiraMCPServer:
             try:
                 versions = await self.client.get_project_versions(project_key)
                 if ctx:
-                    await ctx.info(f"Found {len(versions)} versions in project {project_key}")
+                    await ctx.info(
+                        f"Found {len(versions)} versions in project {project_key}"
+                    )
                 return [VersionResponse(**version) for version in versions]
             except Exception as e:
                 if ctx:
-                    await ctx.error(f"Failed to get versions for project {project_key}: {str(e)}")
+                    await ctx.error(
+                        f"Failed to get versions for project {project_key}: {str(e)}"
+                    )
                 raise
 
         @self.mcp.tool()
