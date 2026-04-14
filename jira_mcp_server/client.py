@@ -295,12 +295,12 @@ class JiraClient:
             )
             return [
                 {
-                    'id': version.id,
-                    'name': version.name,
-                    'description': getattr(version, 'description', '') or '',
-                    'released': getattr(version, 'released', False),
-                    'archived': getattr(version, 'archived', False),
-                    'release_date': getattr(version, 'releaseDate', None),
+                    "id": version.id,
+                    "name": version.name,
+                    "description": getattr(version, "description", "") or "",
+                    "released": getattr(version, "released", False),
+                    "archived": getattr(version, "archived", False),
+                    "release_date": getattr(version, "releaseDate", None),
                 }
                 for version in versions
             ]

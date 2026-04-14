@@ -18,8 +18,9 @@
 
 import os
 import subprocess
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
 
 from jira_mcp_server.server import JiraMCPServer
 
@@ -27,10 +28,13 @@ from jira_mcp_server.server import JiraMCPServer
 @pytest.fixture
 def server():
     """Create a JiraMCPServer instance with mocked dependencies."""
-    with patch.dict(os.environ, {
-        'JIRA_SERVER_URL': 'https://test.atlassian.net',
-        'JIRA_ACCESS_TOKEN': 'test-token',
-    }):
+    with patch.dict(
+        os.environ,
+        {
+            "JIRA_SERVER_URL": "https://test.atlassian.net",
+            "JIRA_ACCESS_TOKEN": "test-token",
+        },
+    ):
         srv = JiraMCPServer()
         return srv
 
@@ -41,8 +45,13 @@ async def test_update_check_sets_warning_when_behind(server):
     fetch_result = MagicMock(returncode=0)
     count_result = MagicMock(returncode=0, stdout="3\n")
 
-    with patch("jira_mcp_server.server.os.path.isdir", return_value=True), \
-         patch("jira_mcp_server.server.subprocess.run", side_effect=[fetch_result, count_result]):
+    with (
+        patch("jira_mcp_server.server.os.path.isdir", return_value=True),
+        patch(
+            "jira_mcp_server.server.subprocess.run",
+            side_effect=[fetch_result, count_result],
+        ),
+    ):
         await server._check_for_updates()
 
     assert server._update_warning is not None
@@ -55,8 +64,13 @@ async def test_update_check_no_warning_when_up_to_date(server):
     fetch_result = MagicMock(returncode=0)
     count_result = MagicMock(returncode=0, stdout="0\n")
 
-    with patch("jira_mcp_server.server.os.path.isdir", return_value=True), \
-         patch("jira_mcp_server.server.subprocess.run", side_effect=[fetch_result, count_result]):
+    with (
+        patch("jira_mcp_server.server.os.path.isdir", return_value=True),
+        patch(
+            "jira_mcp_server.server.subprocess.run",
+            side_effect=[fetch_result, count_result],
+        ),
+    ):
         await server._check_for_updates()
 
     assert server._update_warning is None
@@ -65,8 +79,10 @@ async def test_update_check_no_warning_when_up_to_date(server):
 @pytest.mark.asyncio
 async def test_update_check_no_git_dir(server):
     """When .git directory does not exist, skip silently."""
-    with patch("jira_mcp_server.server.os.path.isdir", return_value=False), \
-         patch("jira_mcp_server.server.subprocess.run") as mock_run:
+    with (
+        patch("jira_mcp_server.server.os.path.isdir", return_value=False),
+        patch("jira_mcp_server.server.subprocess.run") as mock_run,
+    ):
         await server._check_for_updates()
 
     mock_run.assert_not_called()
@@ -76,8 +92,13 @@ async def test_update_check_no_git_dir(server):
 @pytest.mark.asyncio
 async def test_update_check_handles_fetch_failure(server):
     """If git fetch fails, no warning and no crash."""
-    with patch("jira_mcp_server.server.os.path.isdir", return_value=True), \
-         patch("jira_mcp_server.server.subprocess.run", side_effect=subprocess.TimeoutExpired("git", 10)):
+    with (
+        patch("jira_mcp_server.server.os.path.isdir", return_value=True),
+        patch(
+            "jira_mcp_server.server.subprocess.run",
+            side_effect=subprocess.TimeoutExpired("git", 10),
+        ),
+    ):
         await server._check_for_updates()
 
     assert server._update_warning is None
@@ -89,8 +110,13 @@ async def test_update_check_handles_rev_list_failure(server):
     fetch_result = MagicMock(returncode=0)
     count_result = MagicMock(returncode=128, stdout="")
 
-    with patch("jira_mcp_server.server.os.path.isdir", return_value=True), \
-         patch("jira_mcp_server.server.subprocess.run", side_effect=[fetch_result, count_result]):
+    with (
+        patch("jira_mcp_server.server.os.path.isdir", return_value=True),
+        patch(
+            "jira_mcp_server.server.subprocess.run",
+            side_effect=[fetch_result, count_result],
+        ),
+    ):
         await server._check_for_updates()
 
     assert server._update_warning is None

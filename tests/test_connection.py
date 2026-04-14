@@ -15,9 +15,11 @@ This script will:
 import asyncio
 import os
 import sys
+
 import pytest
-from jira_mcp_server.config import JiraConfig
+
 from jira_mcp_server.client import JiraClient
+from jira_mcp_server.config import JiraConfig
 
 
 async def _run_jira_connection_check() -> None:
@@ -116,7 +118,9 @@ async def _run_jira_connection_check() -> None:
             print("   Your recent issues:")
             for issue in issues:
                 print(f"      - {issue['key']}: {issue['summary'][:60]}")
-                print(f"        Status: {issue['status']}, Updated: {issue['updated'][:10]}")
+                print(
+                    f"        Status: {issue['status']}, Updated: {issue['updated'][:10]}"
+                )
         print()
     except Exception as e:
         print(f"   ⚠️  Search test: {e}")
@@ -155,6 +159,7 @@ def main():
     except Exception as e:
         print(f"\n\n❌ Unexpected error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 
