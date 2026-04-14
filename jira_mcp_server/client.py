@@ -284,6 +284,29 @@ class JiraClient:
         except JIRAError as e:
             raise ValueError(f"Failed to get projects: {e}")
 
+    async def get_project_versions(self, project_key: str) -> List[Dict[str, Any]]:
+        """Get all versions for a specific project."""
+        if not self._jira:
+            raise RuntimeError("Not connected to Jira")
+
+        try:
+            versions = await self._async_call(
+                lambda: self._jira.project_versions(project_key)
+            )
+            return [
+                {
+                    'id': version.id,
+                    'name': version.name,
+                    'description': getattr(version, 'description', '') or '',
+                    'released': getattr(version, 'released', False),
+                    'archived': getattr(version, 'archived', False),
+                    'release_date': getattr(version, 'releaseDate', None),
+                }
+                for version in versions
+            ]
+        except JIRAError as e:
+            raise ValueError(f"Failed to get versions for project {project_key}: {e}")
+
     async def get_project_components(self, project_key: str) -> List[Dict[str, Any]]:
         """Get all components for a specific project."""
         if not self._jira:

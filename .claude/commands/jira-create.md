@@ -46,7 +46,7 @@ Use `AskUserQuestion` to collect the remaining fields. Group questions logically
 - Minor
 - Trivial
 
-**Work Type** (submit as ID number):
+**Activity Type** (submit as ID number):
 - None = -1
 - Associate Wellness & Development = 10604
 - BU Features = 10605
