@@ -76,6 +76,11 @@ Or install with development dependencies:
 pip install -e ".[dev]"
 ```
 
+> **macOS**: Use `pip3` instead of `pip`:
+> ```bash
+> pip3 install -e .
+> ```
+
 ## Configuration
 
 1. Copy the example environment file:
@@ -215,6 +220,19 @@ Claude Code looks for MCP server configurations in the following locations (in o
 }
 ```
 
+> **macOS**: Use `python3` (or the full path `/usr/local/bin/python3`) instead of `python`:
+> ```json
+> {
+>   "mcpServers": {
+>     "jira-mcp-server": {
+>       "command": "/usr/local/bin/python3",
+>       "args": ["-m", "jira_mcp_server.main"],
+>       "cwd": "/home/user/workspace_git/jira-mcp-server"
+>     }
+>   }
+> }
+> ```
+
 **Option A**: Create `.mcp.json` in your project root:
 
 **Option B**: Create `.claude/settings.json` in your project root:
@@ -274,6 +292,8 @@ Gemini CLI is Google's command-line interface that supports MCP servers.
 }
 ```
 
+> **macOS**: Use `python3` (or the full path `/usr/local/bin/python3`) instead of `python` for the `"command"` value.
+
 2. **Restart Gemini CLI** to apply the configuration.
 
 3. **Test the connection** by running a command that interacts with Jira.
@@ -320,6 +340,8 @@ Cursor is a code editor that supports MCP servers for AI-powered development ass
   }
 }
 ```
+
+> **macOS**: Use `python3` (or the full path `/usr/local/bin/python3`) instead of `python` for the `"command"` value.
 
 2. **Restart Cursor** to apply the configuration.
 
@@ -910,6 +932,8 @@ To connect to multiple Jira instances, create separate MCP server configurations
   }
 }
 ```
+
+> **macOS**: Use `python3` (or the full path `/usr/local/bin/python3`) instead of `python` for both `"command"` values above.
 
 ### Security Considerations
 
