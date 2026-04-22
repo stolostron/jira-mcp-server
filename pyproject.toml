@@ -12,10 +12,11 @@ authors = [
 dependencies = [
     "fastmcp>=3.2.4",
     "jira>=3.10.5",
-    "pydantic>=2.13.1",
+    "pydantic>=2.13.2",
     "asyncio-throttle>=1.0.2",
     "python-dotenv>=1.2.2",
     "uvicorn>=0.44.0",
+    "authlib>=1.7.0",
 ]
 requires-python = ">=3.10"
 readme = "README.md"
@@ -28,6 +29,7 @@ dev = [
     "black>=26.3.1",
     "isort>=8.0.1",
     "mypy>=1.20.1",
+    "pip-audit>=2.10.0",
 ]
 
 [project.scripts]
