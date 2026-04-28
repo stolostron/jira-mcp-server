@@ -18,7 +18,7 @@
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from asyncio_throttle import Throttler
 from jira import JIRA
@@ -41,11 +41,16 @@ class JiraClient:
     async def connect(self) -> None:
         """Connect to Jira Cloud using basic auth with email and API token."""
         try:
-            options = {"verify": self.config.verify_ssl, "timeout": self.config.timeout}
+            options: Dict[str, Any] = {
+                "verify": self.config.verify_ssl,
+                "timeout": self.config.timeout,
+            }
 
             self._jira = JIRA(
                 server=self.config.server_url,
-                basic_auth=(self.config.email, self.config.access_token),
+                basic_auth=cast(
+                    tuple[str, str], (self.config.email, self.config.access_token)
+                ),
                 options=options,
             )
 
@@ -54,7 +59,7 @@ class JiraClient:
         except JIRAError as e:
             raise ConnectionError(f"Failed to connect to Jira: {e}")
 
-    async def _async_call(self, func):
+    async def _async_call(self, func: Any) -> Any:
         """Execute synchronous Jira calls asynchronously with throttling."""
         async with self.throttler:
             loop = asyncio.get_running_loop()
@@ -102,7 +107,7 @@ class JiraClient:
         summary: str,
         description: str,
         issue_type: str = "Task",
-        **fields,
+        **fields: Any,
     ) -> Dict[str, Any]:
         """Create a new issue."""
         if not self._jira:
@@ -116,9 +121,10 @@ class JiraClient:
                 seconds = self._time_string_to_seconds(
                     fields["timetracking"]["originalEstimate"]
                 )
-                fields["timetracking"]["originalEstimate"] = str(
-                    seconds // 60
-                )  # Jira expects minutes as string
+                if seconds is not None:
+                    fields["timetracking"]["originalEstimate"] = str(
+                        seconds // 60
+                    )  # Jira expects minutes as string
 
         issue_dict = {
             "project": {"key": project_key},
@@ -136,7 +142,7 @@ class JiraClient:
         except JIRAError as e:
             raise ValueError(f"Failed to create issue: {e}")
 
-    async def update_issue(self, issue_key: str, **fields) -> Dict[str, Any]:
+    async def update_issue(self, issue_key: str, **fields: Any) -> Dict[str, Any]:
         """Update an existing issue."""
         if not self._jira:
             raise RuntimeError("Not connected to Jira")
@@ -149,9 +155,10 @@ class JiraClient:
                 seconds = self._time_string_to_seconds(
                     fields["timetracking"]["originalEstimate"]
                 )
-                fields["timetracking"]["originalEstimate"] = str(
-                    seconds // 60
-                )  # Jira expects minutes as string
+                if seconds is not None:
+                    fields["timetracking"]["originalEstimate"] = str(
+                        seconds // 60
+                    )  # Jira expects minutes as string
 
         try:
             issue = await self._async_call(lambda: self._jira.issue(issue_key))
@@ -361,7 +368,7 @@ class JiraClient:
 
         try:
             # Prepare comment data if provided
-            comment_data = None
+            comment_data: Optional[Dict[str, Any]] = None
             if comment:
                 comment_data = {"body": comment}
                 if security_level:
@@ -577,8 +584,9 @@ class JiraClient:
                 raise ValueError(
                     f"Failed to get edit metadata for {issue_key}: HTTP {response.status_code}"
                 )
-            data = response.json()
-            return data.get("fields", {})
+            data: Dict[str, Any] = response.json()
+            result: Dict[str, Any] = data.get("fields", {})
+            return result
         except JIRAError as e:
             raise ValueError(f"Failed to get edit metadata for {issue_key}: {e}") from e
 
@@ -688,7 +696,7 @@ class JiraClient:
             "total_failed": len(failures),
         }
 
-    def _extract_custom_field_value(self, field_value):
+    def _extract_custom_field_value(self, field_value: Any) -> Optional[str]:
         """Extract string value from custom field that might be a CustomFieldOption object."""
         if field_value is None:
             return None
@@ -721,7 +729,7 @@ class JiraClient:
         # Fallback to string conversion
         return str(field_value)
 
-    def _extract_git_pull_requests(self, field_value):
+    def _extract_git_pull_requests(self, field_value: Any) -> Optional[str]:
         """Extract git pull requests from custom field that might be a list or string."""
         if field_value is None:
             return None
@@ -739,7 +747,7 @@ class JiraClient:
         # Fallback to string conversion
         return str(field_value)
 
-    def _time_string_to_seconds(self, time_string: str) -> int:
+    def _time_string_to_seconds(self, time_string: str) -> Optional[int]:
         """Convert Jira time format (e.g., '1h 30m', '2d', '45m') to seconds."""
         if not time_string:
             return None
@@ -747,7 +755,7 @@ class JiraClient:
         # Remove whitespace and convert to lowercase
         time_string = time_string.replace(" ", "").lower()
 
-        total_seconds = 0
+        total_seconds: float = 0
         current_number = ""
 
         for char in time_string:
@@ -768,7 +776,7 @@ class JiraClient:
 
         return int(total_seconds)
 
-    def _seconds_to_time_string(self, seconds: int) -> str:
+    def _seconds_to_time_string(self, seconds: Optional[int]) -> Optional[str]:
         """Convert seconds to Jira time format (e.g., '1h 30m')."""
         if seconds is None:
             return None
@@ -792,7 +800,7 @@ class JiraClient:
 
         return " ".join(parts)
 
-    def _issue_to_dict(self, issue) -> Dict[str, Any]:
+    def _issue_to_dict(self, issue: Any) -> Dict[str, Any]:
         """Convert Jira issue object to dictionary."""
         result = {
             "key": issue.key,
@@ -857,7 +865,7 @@ class JiraClient:
                 issue.fields, "customfield_10023", None
             ),  # Target End custom field
             "original_estimate": self._seconds_to_time_string(
-                getattr(issue.fields, "timeoriginalestimate", None)
+                cast(Optional[int], getattr(issue.fields, "timeoriginalestimate", None))
             ),
             "story_points": getattr(
                 issue.fields, "customfield_10028", None
