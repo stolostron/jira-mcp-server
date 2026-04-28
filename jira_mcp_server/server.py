@@ -204,7 +204,7 @@ class ComponentAliasResponse(BaseModel):
 class JiraMCPServer:
     """MCP Server for Jira integration."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the Jira MCP server."""
         self.mcp = FastMCP("Jira MCP Server")
         self.config = JiraConfig.from_env()
@@ -417,7 +417,7 @@ class JiraMCPServer:
             if ctx:
                 await ctx.info(f"Creating issue in project {project_key}")
 
-            fields = {}
+            fields: Dict[str, Any] = {}
             if priority:
                 fields["priority"] = {"name": priority}
             if assignee:
@@ -558,7 +558,7 @@ class JiraMCPServer:
             if ctx:
                 await ctx.info(f"Updating issue: {issue_key}")
 
-            fields = {}
+            fields: Dict[str, Any] = {}
             if summary:
                 fields["summary"] = summary
             if description:
@@ -659,6 +659,7 @@ class JiraMCPServer:
             field_type = schema.get("type", "")
 
             # Determine the correct clear value based on schema type
+            clear_value: Any
             if field_type == "array":
                 clear_value = []
             elif field_type in ("string", "date", "datetime"):
@@ -1359,7 +1360,7 @@ class JiraMCPServer:
             logger.error(f"Failed to start server: {e}")
             raise
 
-    def create_sse_app(self, host: str = "127.0.0.1", port: int = 8000):
+    def create_sse_app(self, host: str = "127.0.0.1", port: int = 8000) -> Any:
         """Create SSE HTTP app for the MCP server.
 
         Args:
@@ -1371,7 +1372,7 @@ class JiraMCPServer:
         """
         return self.mcp.http_app(transport="sse")
 
-    def run_sse_server(self, host: str = "127.0.0.1", port: int = 8000):
+    def run_sse_server(self, host: str = "127.0.0.1", port: int = 8000) -> None:
         """Run the MCP server with SSE transport.
 
         Args:

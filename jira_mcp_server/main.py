@@ -25,7 +25,7 @@ from typing import Optional
 from .server import JiraMCPServer
 
 
-async def main_async() -> None:
+async def main_async() -> "JiraMCPServer":
     """Main async function for server initialization."""
     server = JiraMCPServer()
     await server.start()
