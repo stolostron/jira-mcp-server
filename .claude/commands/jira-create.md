@@ -102,7 +102,7 @@ Before calling `create_issue`, display a summary of ALL fields to the user and a
 Always set:
 - `project_key`: "ACM"
 - `security_level`: "Red Hat Employee"
-- `assignee`: "jpacker@redhat.com"
+- `assignee`: "your-email@redhat.com"
 
 Call `create_issue` with all collected fields.
 
