@@ -7,5 +7,5 @@ sessions:
   jira: "ACM-33687"
   jira_url: "https://redhat.atlassian.net/browse/ACM-33687"
   status: "In Progress"
-  pr: ~
-  summary: "Determine and implement the best approach to distribute the Jira MCP server as a bundle for agent-container images without cloning the full repo"
+  pr: "https://github.com/jnpacker/agent-containers/pull/new/ACM-33677"
+  summary: "Implemented wheel-based distribution via GitHub Releases. Created release workflow, tagged v0.1.0, updated agent-containers to pip install from releases using gh CLI with build-time secret auth"
