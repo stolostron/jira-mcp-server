@@ -57,12 +57,15 @@ All custom field IDs and work type IDs have been updated in the code. No other c
 - **Type Safety**: Pydantic models for structured data validation
 - **Multiple Transports**: Support for both STDIO and SSE (HTTP) transports
 - **Client Integration**: Works with Claude Code, Gemini CLI, Cursor, and other MCP clients
+- **Issue attachments**: Upload files to issues (`add_issue_attachments`)
+- **Inline comment images**: Embed screenshots in comments via `add_comment` with
+  `attachment_paths` / `inline_attachment_paths` (Jira wiki → ADF on Cloud)
 
 ## Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/jira-mcp-server.git
+git clone https://github.com/atifshafi/jira-mcp-server.git
 cd jira-mcp-server
 ```
 
@@ -415,11 +418,27 @@ transition_issue(
 **Note:** Transitions beyond "New", "Backlog", and "In Progress" require `fix_version` to be set on the issue. This ensures all completed work is tied to a release version.
 
 ### `add_comment`
-Add a comment to an issue:
+Add a comment to an issue. Optional attachments embed inline in the comment (QE verification screenshots):
+
 ```python
 add_comment(
-    issue_key="PROJ-123",
-    comment="This has been resolved"
+    issue_key="ACM-29818",
+    comment="Verified on 2.17.0-DOWNSTREAM-2026-05-20 (CSV 2.17.0), closing the ticket.",
+    attachment_paths=["/path/to/screenshot.png"],
+    inline_attachment_paths=["/path/to/screenshot.png"],
+)
+```
+
+When `attachment_paths` is set, files upload first; `inline_attachment_paths` (subset) are embedded via wiki
+`!filename|thumbnail!` in the comment body. If `inline_attachment_paths` is omitted, all uploaded files are inlined.
+
+### `add_issue_attachments`
+Upload files to the issue Attachments section only (no comment):
+
+```python
+add_issue_attachments(
+    issue_key="ACM-29818",
+    file_paths=["/path/to/evidence.png"],
 )
 ```
 

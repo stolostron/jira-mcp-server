@@ -50,7 +50,7 @@ def _user_ref(identifier: str) -> Dict[str, str]:
     ident = identifier.strip() if isinstance(identifier, str) else ""
     if not ident:
         raise ValueError("User identifier cannot be empty")
-    return {'accountId': ident}
+    return {"accountId": ident}
 
 
 def _validate_git_commit_sha(sha: str) -> None:
@@ -91,11 +91,13 @@ class ParentResponse(BaseModel):
     summary: str
     issue_type: str
 
+
 class IssueLinkResponse(BaseModel):
     type: str
     direction: str
     key: str
     summary: Optional[str] = None
+
 
 class IssueResponse(BaseModel):
     key: str
@@ -162,12 +164,22 @@ class ComponentResponse(BaseModel):
     is_assignee_type_valid: bool
 
 
+class AttachmentUploadResponse(BaseModel):
+    id: str
+    filename: str
+    mime_type: Optional[str] = None
+    size: Optional[int] = None
+    content_url: Optional[str] = None
+
+
 class CommentResponse(BaseModel):
     id: str
     body: str
     author: str
     created: str
     updated: str
+    attachments_uploaded: List[AttachmentUploadResponse] = []
+    inline_filenames: List[str] = []
 
 
 class WorkLogResponse(BaseModel):
@@ -525,9 +537,7 @@ class JiraMCPServer:
                 fields["customfield_10718"] = acceptance_criteria
             if contributors is not None:
                 cleaned = [
-                    c.strip()
-                    for c in contributors
-                    if isinstance(c, str) and c.strip()
+                    c.strip() for c in contributors if isinstance(c, str) and c.strip()
                 ]
                 if cleaned:
                     fields["customfield_10466"] = [_user_ref(c) for c in cleaned]
@@ -705,9 +715,7 @@ class JiraMCPServer:
                 fields["customfield_10718"] = acceptance_criteria
             if contributors is not None:
                 cleaned = [
-                    c.strip()
-                    for c in contributors
-                    if isinstance(c, str) and c.strip()
+                    c.strip() for c in contributors if isinstance(c, str) and c.strip()
                 ]
                 if cleaned:
                     fields["customfield_10466"] = [_user_ref(c) for c in cleaned]
@@ -835,10 +843,48 @@ class JiraMCPServer:
                 raise
 
         @self.mcp.tool()
+        async def add_issue_attachments(
+            issue_key: str,
+            file_paths: List[str],
+            ctx: Optional[Context] = None,
+        ) -> List[AttachmentUploadResponse]:
+            """Upload files as issue-level attachments (not embedded in a comment).
+
+            Use add_comment with attachment_paths when you need the image inline
+            in the comment body (QE verification screenshots).
+
+            Args:
+                issue_key: Jira issue key (e.g., 'ACM-29818')
+                file_paths: Absolute or relative paths to files to upload
+            """
+            if ctx:
+                await ctx.info(
+                    f"Uploading {len(file_paths)} attachment(s) to {issue_key}"
+                )
+
+            try:
+                uploaded = await self.client.add_issue_attachments(
+                    issue_key, file_paths
+                )
+                if ctx:
+                    await ctx.info(
+                        f"Uploaded {len(uploaded)} attachment(s) to {issue_key}"
+                    )
+                return [AttachmentUploadResponse(**item) for item in uploaded]
+            except Exception as e:
+                if ctx:
+                    await ctx.error(
+                        f"Failed to upload attachments to {issue_key}: {str(e)}"
+                    )
+                raise
+
+        @self.mcp.tool()
         async def add_comment(
             issue_key: str,
             comment: str,
             security_level: Optional[str] = "Red Hat Employee",
+            attachment_paths: Optional[List[str]] = None,
+            inline_attachment_paths: Optional[List[str]] = None,
             ctx: Optional[Context] = None,
         ) -> CommentResponse:
             """Add a comment to a Jira issue.
@@ -847,6 +893,10 @@ class JiraMCPServer:
                 issue_key: Jira issue key (e.g., 'PROJ-123')
                 comment: Comment text
                 security_level: Security level name (default: "Red Hat Employee")
+                attachment_paths: Optional files to upload to the issue before commenting
+                inline_attachment_paths: Subset of attachment_paths to show inline in the
+                    comment (wiki ``!filename|thumbnail!``). When attachment_paths is set
+                    and this is omitted, all uploaded files are embedded inline.
                 ctx: MCP context for progress reporting
             """
             if ctx:
@@ -854,7 +904,11 @@ class JiraMCPServer:
 
             try:
                 comment_data = await self.client.add_comment(
-                    issue_key, comment, security_level
+                    issue_key,
+                    comment,
+                    security_level,
+                    attachment_paths=attachment_paths,
+                    inline_attachment_paths=inline_attachment_paths,
                 )
                 if ctx:
                     await ctx.info(f"Added comment to issue: {issue_key}")

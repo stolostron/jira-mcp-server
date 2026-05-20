@@ -119,7 +119,7 @@ def make_mock_issue(
 
     # Components
     comp_objs = []
-    for c in (components or []):
+    for c in components or []:
         comp_obj = MagicMock()
         comp_obj.name = c
         comp_objs.append(comp_obj)
@@ -128,22 +128,22 @@ def make_mock_issue(
     # Comments
     comment_container = MagicMock()
     comment_list = []
-    for c in (comments or []):
+    for c in comments or []:
         comment_obj = MagicMock()
-        comment_obj.id = c.get('id', '1')
-        comment_obj.body = c.get('body', '')
+        comment_obj.id = c.get("id", "1")
+        comment_obj.body = c.get("body", "")
         author_obj = MagicMock()
-        author_obj.displayName = c.get('author', 'author')
+        author_obj.displayName = c.get("author", "author")
         comment_obj.author = author_obj
-        comment_obj.created = c.get('created', created)
-        comment_obj.updated = c.get('updated', updated)
+        comment_obj.created = c.get("created", created)
+        comment_obj.updated = c.get("updated", updated)
         comment_list.append(comment_obj)
     comment_container.comments = comment_list
     fields.comment = comment_container
 
     # Fix versions
     fv_objs = []
-    for v in (fix_versions or []):
+    for v in fix_versions or []:
         fv_obj = MagicMock()
         fv_obj.name = v
         fv_objs.append(fv_obj)
@@ -151,7 +151,7 @@ def make_mock_issue(
 
     # Target version (custom field)
     tv_objs = []
-    for v in (target_version or []):
+    for v in target_version or []:
         tv_obj = MagicMock()
         tv_obj.name = v
         tv_objs.append(tv_obj)
@@ -178,7 +178,7 @@ def make_mock_issue(
     fields.customfield_10023 = target_end
     fields.timeoriginalestimate = timeoriginalestimate
     fields.customfield_10028 = story_points
-    
+
     # Git commit
     if git_commit:
         gc_obj = MagicMock()
@@ -191,16 +191,16 @@ def make_mock_issue(
 
     # Subtasks
     st_objs = []
-    for st in (subtasks or []):
+    for st in subtasks or []:
         st_obj = MagicMock()
-        st_obj.key = st['key']
+        st_obj.key = st["key"]
         st_fields = MagicMock()
-        st_fields.summary = st['summary']
+        st_fields.summary = st["summary"]
         st_status = MagicMock()
-        st_status.name = st['status']
+        st_status.name = st["status"]
         st_fields.status = st_status
         st_type = MagicMock()
-        st_type.name = st.get('issue_type', 'Sub-task')
+        st_type.name = st.get("issue_type", "Sub-task")
         st_fields.issuetype = st_type
         st_obj.fields = st_fields
         st_objs.append(st_obj)
@@ -209,11 +209,11 @@ def make_mock_issue(
     # Parent
     if parent:
         parent_obj = MagicMock()
-        parent_obj.key = parent['key']
+        parent_obj.key = parent["key"]
         parent_fields = MagicMock()
-        parent_fields.summary = parent['summary']
+        parent_fields.summary = parent["summary"]
         parent_type = MagicMock()
-        parent_type.name = parent.get('issue_type', 'Story')
+        parent_type.name = parent.get("issue_type", "Story")
         parent_fields.issuetype = parent_type
         parent_obj.fields = parent_fields
         fields.parent = parent_obj
@@ -236,7 +236,7 @@ def make_mock_issue(
 
     # Affects Versions
     ver_objs = []
-    for v in (versions or []):
+    for v in versions or []:
         ver_obj = MagicMock()
         ver_obj.name = v
         ver_objs.append(ver_obj)
@@ -247,7 +247,7 @@ def make_mock_issue(
 
     # Contributors (multi-user picker)
     contributor_objs = []
-    for c in (contributors or []):
+    for c in contributors or []:
         c_obj = MagicMock()
         c_obj.displayName = c
         contributor_objs.append(c_obj)
@@ -255,25 +255,25 @@ def make_mock_issue(
 
     # Issue Links
     link_objs = []
-    for lnk in (issuelinks or []):
+    for lnk in issuelinks or []:
         link_obj = MagicMock()
         link_type_obj = MagicMock()
-        link_type_obj.name = lnk['type']
+        link_type_obj.name = lnk["type"]
         link_obj.type = link_type_obj
-        if lnk['direction'] == 'outward':
+        if lnk["direction"] == "outward":
             outward = MagicMock()
-            outward.key = lnk['key']
+            outward.key = lnk["key"]
             outward_fields = MagicMock()
-            outward_fields.summary = lnk['summary']
+            outward_fields.summary = lnk["summary"]
             outward.fields = outward_fields
             link_obj.outwardIssue = outward
             # Make sure inwardIssue is not present
             del link_obj.inwardIssue
         else:
             inward = MagicMock()
-            inward.key = lnk['key']
+            inward.key = lnk["key"]
             inward_fields = MagicMock()
-            inward_fields.summary = lnk['summary']
+            inward_fields.summary = lnk["summary"]
             inward.fields = inward_fields
             link_obj.inwardIssue = inward
             # Make sure outwardIssue is not present
@@ -283,7 +283,7 @@ def make_mock_issue(
 
     # Attachments
     att_objs = []
-    for a in (attachments or []):
+    for a in attachments or []:
         att_obj = MagicMock()
         att_obj.filename = a
         att_objs.append(att_obj)

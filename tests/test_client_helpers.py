@@ -27,16 +27,22 @@ from jira_mcp_server.config import JiraConfig
 @pytest.fixture
 def client():
     """Create a JiraClient instance (not connected) for testing helper methods."""
-    config = JiraConfig(server_url="https://jira.example.invalid", access_token="fake-token-for-testing")
+    config = JiraConfig(
+        server_url="https://jira.example.invalid", access_token="fake-token-for-testing"
+    )
     return JiraClient(config)
 
 
 # --- _extract_sprint tests (Jira Cloud format: array of sprint name strings) ---
 
+
 class TestExtractSprint:
     def test_single_sprint(self, client):
         """Single sprint name in array is returned."""
-        assert JiraClient._extract_sprint(["ACM Console 2.17 - 1"]) == "ACM Console 2.17 - 1"
+        assert (
+            JiraClient._extract_sprint(["ACM Console 2.17 - 1"])
+            == "ACM Console 2.17 - 1"
+        )
 
     def test_multiple_sprints_returns_last(self, client):
         """With multiple sprints, returns the last one (most recent)."""
@@ -72,6 +78,7 @@ class TestExtractSprint:
 
 # --- _extract_user_display_name tests ---
 
+
 class TestExtractUserDisplayName:
     def test_none_returns_none(self, client):
         """None input returns None."""
@@ -94,6 +101,7 @@ class TestExtractUserDisplayName:
 
 # --- _extract_user_list tests ---
 
+
 class TestExtractUserList:
     def test_list_of_objects(self, client):
         """List of user objects returns display names."""
@@ -101,7 +109,10 @@ class TestExtractUserList:
         user1.displayName = "Alice Smith"
         user2 = MagicMock()
         user2.displayName = "Bob Jones"
-        assert JiraClient._extract_user_list([user1, user2]) == ["Alice Smith", "Bob Jones"]
+        assert JiraClient._extract_user_list([user1, user2]) == [
+            "Alice Smith",
+            "Bob Jones",
+        ]
 
     def test_list_of_strings(self, client):
         """List of plain strings is returned as-is."""
@@ -134,6 +145,7 @@ class TestExtractUserList:
 
 # --- _parse_issue_links tests ---
 
+
 class TestParseIssueLinks:
     def test_outward_link(self, client):
         """Outward issue link is parsed correctly."""
@@ -151,10 +163,10 @@ class TestParseIssueLinks:
         result = client._parse_issue_links([link])
         assert len(result) == 1
         assert result[0] == {
-            'type': 'Blocks',
-            'direction': 'outward',
-            'key': 'ACM-100',
-            'summary': 'Blocked issue'
+            "type": "Blocks",
+            "direction": "outward",
+            "key": "ACM-100",
+            "summary": "Blocked issue",
         }
 
     def test_inward_link(self, client):
@@ -172,10 +184,10 @@ class TestParseIssueLinks:
         result = client._parse_issue_links([link])
         assert len(result) == 1
         assert result[0] == {
-            'type': 'Relates',
-            'direction': 'inward',
-            'key': 'ACM-200',
-            'summary': 'Related issue'
+            "type": "Relates",
+            "direction": "inward",
+            "key": "ACM-200",
+            "summary": "Related issue",
         }
 
     def test_mixed_links(self, client):
@@ -202,8 +214,8 @@ class TestParseIssueLinks:
 
         result = client._parse_issue_links([link_out, link_in])
         assert len(result) == 2
-        assert result[0]['direction'] == 'outward'
-        assert result[1]['direction'] == 'inward'
+        assert result[0]["direction"] == "outward"
+        assert result[1]["direction"] == "inward"
 
     def test_empty_list(self, client):
         """Empty links list returns empty list."""
@@ -225,8 +237,8 @@ class TestParseIssueLinks:
 
         result = client._parse_issue_links([link])
         assert len(result) == 1
-        assert result[0]['type'] == 'unknown'
-        assert result[0]['key'] == 'ACM-400'
+        assert result[0]["type"] == "unknown"
+        assert result[0]["key"] == "ACM-400"
 
     def test_link_with_no_target(self, client):
         """Link with neither outwardIssue nor inwardIssue is skipped."""
@@ -263,8 +275,8 @@ class TestParseIssueLinks:
 
         result = client._parse_issue_links([link])
         assert len(result) == 1
-        assert result[0]['key'] == 'ACM-500'
-        assert result[0]['summary'] is None
+        assert result[0]["key"] == "ACM-500"
+        assert result[0]["summary"] is None
 
     def test_malformed_link_does_not_crash_others(self, client):
         """One malformed link does not prevent parsing of valid links."""
@@ -285,4 +297,4 @@ class TestParseIssueLinks:
 
         result = client._parse_issue_links([bad_link, good_link])
         assert len(result) == 1
-        assert result[0]['key'] == 'ACM-600'
+        assert result[0]["key"] == "ACM-600"

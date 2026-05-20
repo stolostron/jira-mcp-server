@@ -26,7 +26,9 @@ from tests.conftest import make_mock_issue
 @pytest.fixture
 def client():
     """Create a JiraClient instance for testing _issue_to_dict."""
-    config = JiraConfig(server_url="https://jira.example.invalid", access_token="fake-token-for-testing")
+    config = JiraConfig(
+        server_url="https://jira.example.invalid", access_token="fake-token-for-testing"
+    )
     return JiraClient(config)
 
 
@@ -43,24 +45,34 @@ class TestStoryWithAllFields:
             acceptance_criteria="All tests pass and coverage above 80%",
             contributors=["Alice Smith", "Bob Jones"],
             issuelinks=[
-                {'type': 'Blocks', 'direction': 'outward', 'key': 'ACM-100', 'summary': 'Blocked task'},
-                {'type': 'Relates', 'direction': 'inward', 'key': 'ACM-200', 'summary': 'Related work'},
+                {
+                    "type": "Blocks",
+                    "direction": "outward",
+                    "key": "ACM-100",
+                    "summary": "Blocked task",
+                },
+                {
+                    "type": "Relates",
+                    "direction": "inward",
+                    "key": "ACM-200",
+                    "summary": "Related work",
+                },
             ],
             attachments=["screenshot.png", "log.txt"],
         )
 
         result = client._issue_to_dict(issue)
 
-        assert result['sprint'] == "ACM Console 2.17 - 1"
-        assert result['qa_contact'] == "rhn-support-dhuynh"
-        assert result['severity'] == "Important"
-        assert result['affects_versions'] == ["ACM 2.15.0"]
-        assert result['acceptance_criteria'] == "All tests pass and coverage above 80%"
-        assert result['contributors'] == ["Alice Smith", "Bob Jones"]
-        assert len(result['issue_links']) == 2
-        assert result['issue_links'][0]['direction'] == 'outward'
-        assert result['issue_links'][1]['direction'] == 'inward'
-        assert result['attachments'] == ["screenshot.png", "log.txt"]
+        assert result["sprint"] == "ACM Console 2.17 - 1"
+        assert result["qa_contact"] == "rhn-support-dhuynh"
+        assert result["severity"] == "Important"
+        assert result["affects_versions"] == ["ACM 2.15.0"]
+        assert result["acceptance_criteria"] == "All tests pass and coverage above 80%"
+        assert result["contributors"] == ["Alice Smith", "Bob Jones"]
+        assert len(result["issue_links"]) == 2
+        assert result["issue_links"][0]["direction"] == "outward"
+        assert result["issue_links"][1]["direction"] == "inward"
+        assert result["attachments"] == ["screenshot.png", "log.txt"]
 
 
 class TestSubtaskWithParent:
@@ -69,12 +81,16 @@ class TestSubtaskWithParent:
         issue = make_mock_issue(
             key="ACM-30198",
             issue_type="Sub-task",
-            parent={'key': 'ACM-26041', 'summary': 'Parent story', 'issue_type': 'Story'},
+            parent={
+                "key": "ACM-26041",
+                "summary": "Parent story",
+                "issue_type": "Story",
+            },
         )
 
         result = client._issue_to_dict(issue)
-        assert result['parent'] is not None
-        assert result['parent']['key'] == 'ACM-26041'
+        assert result["parent"] is not None
+        assert result["parent"]["key"] == "ACM-26041"
 
 
 class TestTaskInSprint:
@@ -87,7 +103,7 @@ class TestTaskInSprint:
         )
 
         result = client._issue_to_dict(issue)
-        assert result['sprint'] == "ACM Console 2.17 - 1"
+        assert result["sprint"] == "ACM Console 2.17 - 1"
 
 
 class TestIssueWithLinks:
@@ -96,18 +112,34 @@ class TestIssueWithLinks:
         issue = make_mock_issue(
             key="ACM-500",
             issuelinks=[
-                {'type': 'Blocks', 'direction': 'outward', 'key': 'ACM-501', 'summary': 'Downstream'},
-                {'type': 'Cloners', 'direction': 'inward', 'key': 'ACM-499', 'summary': 'Clone source'},
+                {
+                    "type": "Blocks",
+                    "direction": "outward",
+                    "key": "ACM-501",
+                    "summary": "Downstream",
+                },
+                {
+                    "type": "Cloners",
+                    "direction": "inward",
+                    "key": "ACM-499",
+                    "summary": "Clone source",
+                },
             ],
         )
 
         result = client._issue_to_dict(issue)
-        assert len(result['issue_links']) == 2
-        assert result['issue_links'][0] == {
-            'type': 'Blocks', 'direction': 'outward', 'key': 'ACM-501', 'summary': 'Downstream'
+        assert len(result["issue_links"]) == 2
+        assert result["issue_links"][0] == {
+            "type": "Blocks",
+            "direction": "outward",
+            "key": "ACM-501",
+            "summary": "Downstream",
         }
-        assert result['issue_links'][1] == {
-            'type': 'Cloners', 'direction': 'inward', 'key': 'ACM-499', 'summary': 'Clone source'
+        assert result["issue_links"][1] == {
+            "type": "Cloners",
+            "direction": "inward",
+            "key": "ACM-499",
+            "summary": "Clone source",
         }
 
 
@@ -120,7 +152,7 @@ class TestIssueWithAttachments:
         )
 
         result = client._issue_to_dict(issue)
-        assert result['attachments'] == ["report.pdf", "data.csv", "diagram.png"]
+        assert result["attachments"] == ["report.pdf", "data.csv", "diagram.png"]
 
 
 class TestIssueWithAffectsVersions:
@@ -132,7 +164,7 @@ class TestIssueWithAffectsVersions:
         )
 
         result = client._issue_to_dict(issue)
-        assert result['affects_versions'] == ["ACM 2.15.0", "ACM 2.16.0"]
+        assert result["affects_versions"] == ["ACM 2.15.0", "ACM 2.16.0"]
 
 
 class TestMinimalFields:
@@ -150,13 +182,13 @@ class TestMinimalFields:
         )
 
         result = client._issue_to_dict(issue)
-        assert result['sprint'] is None
-        assert result['qa_contact'] is None
-        assert result['severity'] is None
-        assert result['affects_versions'] == []
-        assert result['acceptance_criteria'] is None
-        assert result['contributors'] == []
-        assert result['issue_links'] == []
-        assert result['attachments'] == []
-        assert result['key'] == "ACM-999"
-        assert result['status'] == "New"
+        assert result["sprint"] is None
+        assert result["qa_contact"] is None
+        assert result["severity"] is None
+        assert result["affects_versions"] == []
+        assert result["acceptance_criteria"] is None
+        assert result["contributors"] == []
+        assert result["issue_links"] == []
+        assert result["attachments"] == []
+        assert result["key"] == "ACM-999"
+        assert result["status"] == "New"
