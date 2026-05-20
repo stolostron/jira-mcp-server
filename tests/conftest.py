@@ -16,7 +16,27 @@
 
 """Shared test fixtures for JIRA MCP server tests."""
 
+import json
+import os
+from pathlib import Path
 from unittest.mock import MagicMock
+
+
+def pytest_configure(config):
+    """Load Jira credentials from Cursor MCP config for integration tests."""
+    if os.environ.get("JIRA_RUN_INTEGRATION") != "1":
+        return
+    mcp_json = Path.home() / ".cursor" / "mcp.json"
+    if not mcp_json.is_file():
+        return
+    try:
+        data = json.loads(mcp_json.read_text(encoding="utf-8"))
+        env = data.get("mcpServers", {}).get("jira", {}).get("env", {})
+        for key, value in env.items():
+            if value and key not in os.environ:
+                os.environ[key] = value
+    except (json.JSONDecodeError, OSError):
+        pass
 
 
 def make_mock_issue(

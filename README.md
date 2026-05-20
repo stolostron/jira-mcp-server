@@ -58,6 +58,8 @@ All custom field IDs and work type IDs have been updated in the code. No other c
 - **Multiple Transports**: Support for both STDIO and SSE (HTTP) transports
 - **Client Integration**: Works with Claude Code, Gemini CLI, Cursor, and other MCP clients
 - **Issue attachments**: Upload files to issues (`add_issue_attachments`)
+- **Download issue attachments**: List and download reporter screenshots
+  (`list_issue_attachments`, `download_issue_attachment`) for vision/analysis
 - **Inline comment images**: Embed screenshots in comments via `add_comment` with
   `attachment_paths` / `inline_attachment_paths` (Jira wiki → ADF on Cloud)
 
@@ -440,6 +442,36 @@ add_issue_attachments(
     issue_key="ACM-29818",
     file_paths=["/path/to/evidence.png"],
 )
+```
+
+### `list_issue_attachments`
+List attachment metadata (id, filename, size, content URL) for an issue:
+
+```python
+list_issue_attachments(issue_key="ACM-26935")
+```
+
+`get_issue` also returns `attachment_details` with the same fields (filenames remain in `attachments`).
+
+### `download_issue_attachment`
+Download an attachment to disk (basic auth with `JIRA_EMAIL` + `JIRA_ACCESS_TOKEN`):
+
+```python
+download_issue_attachment(
+    issue_key="ACM-26935",
+    filename="Screenshot 2025-11-25 at 1.30.51 PM.png",
+    save_path="/tmp/acm26935-reporter.png",
+)
+```
+
+Default save location: `$TMPDIR/jira-mcp-attachments/<issue_key>/<filename>`. Max download size 15 MB.
+
+Filenames from Jira may include special Unicode spaces (e.g. narrow no-break space before `PM` in reporter screenshots). Prefer `attachment_id` from `list_issue_attachments`, or a unique substring such as `Screenshot`.
+
+**Integration tests** (live Red Hat Jira; loads creds from `~/.cursor/mcp.json` when `JIRA_RUN_INTEGRATION=1`):
+
+```bash
+JIRA_RUN_INTEGRATION=1 pytest tests/test_attachment_download_integration.py -v
 ```
 
 ### `link_issue`

@@ -137,6 +137,79 @@ async def test_add_comment_with_inline_attachment_uses_wiki_v2(tmp_path, client)
 
 
 @pytest.mark.asyncio
+async def test_list_issue_attachments_returns_metadata(client):
+    attachment = MagicMock()
+    attachment.id = "12345"
+    attachment.filename = "Screenshot.png"
+    attachment.mimeType = "image/png"
+    attachment.size = 1024
+    attachment.content = (
+        "https://redhat.atlassian.net/rest/api/3/attachment/content/12345"
+    )
+    attachment.created = "2025-11-25T18:30:51.000+0000"
+    attachment.author = MagicMock(displayName="Matthew Short")
+
+    issue = MagicMock()
+    issue.fields.attachment = [attachment]
+    client._jira.issue.return_value = issue
+
+    result = await client.list_issue_attachments("ACM-26935")
+
+    assert len(result) == 1
+    assert result[0]["id"] == "12345"
+    assert result[0]["filename"] == "Screenshot.png"
+    assert "content/12345" in result[0]["content_url"]
+
+
+@pytest.mark.asyncio
+async def test_download_issue_attachment_by_filename(tmp_path, client):
+    attachment = MagicMock()
+    attachment.id = "99"
+    attachment.filename = "proof.png"
+    attachment.mimeType = "image/png"
+    attachment.size = 8
+    attachment.content = "https://redhat.atlassian.net/rest/api/3/attachment/content/99"
+    attachment.created = None
+    attachment.author = None
+
+    issue = MagicMock()
+    issue.fields.attachment = [attachment]
+    client._jira.issue.return_value = issue
+
+    png_bytes = b"\x89PNG\r\n\x1a\n"
+
+    class FakeDownloadResponse:
+        status_code = 200
+        text = ""
+        headers = {"Content-Length": str(len(png_bytes))}
+
+        @property
+        def ok(self):
+            return True
+
+        def iter_content(self, chunk_size=65536):
+            yield png_bytes
+
+    dest = tmp_path / "out" / "proof.png"
+
+    with patch("jira_mcp_server.client.requests.get") as mock_get:
+        mock_get.return_value = FakeDownloadResponse()
+        result = await client.download_issue_attachment(
+            "ACM-26935",
+            filename="proof.png",
+            save_path=str(dest),
+        )
+
+    assert result["save_path"] == str(dest.resolve())
+    assert dest.read_bytes() == png_bytes
+    mock_get.assert_called_once()
+    assert mock_get.call_args.kwargs["auth"] == (
+        "ashafi@redhat.com",
+        "fake-token",
+    )
+
+
+@pytest.mark.asyncio
 async def test_add_comment_without_attachments_uses_jira_library(client):
     issue = MagicMock()
     comment_obj = MagicMock()

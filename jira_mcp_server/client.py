@@ -20,6 +20,7 @@ import asyncio
 import json
 import logging
 import os
+import tempfile
 from typing import Any, Dict, List, Optional, cast
 
 import requests
@@ -35,6 +36,9 @@ from .comment_attachments import (
 from .config import JiraConfig
 
 logger = logging.getLogger(__name__)
+
+# Cap download size so MCP responses stay bounded (screenshots are typically < 5 MB).
+DEFAULT_ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024
 
 
 class JiraClient:
@@ -259,6 +263,169 @@ class JiraClient:
                 )
 
         return uploaded
+
+    async def list_issue_attachments(self, issue_key: str) -> List[Dict[str, Any]]:
+        """List attachments on an issue with download metadata."""
+        if not self._jira:
+            raise RuntimeError("Not connected to Jira")
+
+        issue = await self._async_call(lambda: self._jira.issue(issue_key))
+        result: List[Dict[str, Any]] = []
+        for attachment in getattr(issue.fields, "attachment", []) or []:
+            author = getattr(attachment, "author", None)
+            result.append(
+                {
+                    "id": str(getattr(attachment, "id", "")),
+                    "filename": getattr(attachment, "filename", ""),
+                    "mime_type": getattr(attachment, "mimeType", None),
+                    "size": getattr(attachment, "size", None),
+                    "content_url": getattr(attachment, "content", None),
+                    "created": getattr(attachment, "created", None),
+                    "author": (
+                        getattr(author, "displayName", None) if author else None
+                    ),
+                }
+            )
+        return result
+
+    async def download_issue_attachment(
+        self,
+        issue_key: str,
+        attachment_id: Optional[str] = None,
+        filename: Optional[str] = None,
+        save_path: Optional[str] = None,
+        max_bytes: int = DEFAULT_ATTACHMENT_MAX_BYTES,
+    ) -> Dict[str, Any]:
+        """Download an issue attachment to disk using Jira basic auth.
+
+        Provide *attachment_id* or *filename* (exact match, then single substring match).
+        """
+        if not attachment_id and not filename:
+            raise ValueError("Provide attachment_id or filename")
+
+        attachments = await self.list_issue_attachments(issue_key)
+        if not attachments:
+            raise ValueError(f"No attachments on issue {issue_key}")
+
+        target = self._resolve_issue_attachment(
+            attachments, attachment_id=attachment_id, filename=filename
+        )
+        content_url = target.get("content_url")
+        if not content_url:
+            raise ValueError(
+                f"Attachment {target.get('filename')!r} has no content URL"
+            )
+
+        resolved_path = self._resolve_attachment_save_path(
+            issue_key, target["filename"], save_path
+        )
+
+        def _download() -> int:
+            response = requests.get(
+                content_url,
+                auth=(self.config.email, self.config.access_token),
+                headers={"X-Atlassian-Token": "no-check"},
+                timeout=self.config.timeout,
+                stream=True,
+            )
+            if not response.ok:
+                raise JIRAError(
+                    f"Attachment download failed (HTTP {response.status_code}): "
+                    f"{response.text}",
+                    status_code=response.status_code,
+                    url=content_url,
+                    text=response.text,
+                )
+
+            content_length = response.headers.get("Content-Length")
+            if content_length and int(content_length) > max_bytes:
+                raise ValueError(
+                    f"Attachment too large ({content_length} bytes); "
+                    f"max {max_bytes} bytes"
+                )
+
+            data = bytearray()
+            for chunk in response.iter_content(chunk_size=65536):
+                if not chunk:
+                    continue
+                data.extend(chunk)
+                if len(data) > max_bytes:
+                    raise ValueError(
+                        f"Attachment exceeds max size ({max_bytes} bytes)"
+                    )
+
+            with open(resolved_path, "wb") as handle:
+                handle.write(data)
+            return len(data)
+
+        nbytes = await self._async_call(_download)
+        return {
+            "issue_key": issue_key,
+            "attachment_id": target["id"],
+            "filename": target["filename"],
+            "mime_type": target.get("mime_type"),
+            "size": nbytes,
+            "save_path": os.path.abspath(resolved_path),
+            "content_url": content_url,
+        }
+
+    @staticmethod
+    def _resolve_issue_attachment(
+        attachments: List[Dict[str, Any]],
+        attachment_id: Optional[str] = None,
+        filename: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Pick one attachment by id or filename."""
+        if attachment_id:
+            for item in attachments:
+                if str(item.get("id")) == str(attachment_id):
+                    return item
+            raise ValueError(f"Attachment id {attachment_id!r} not found on issue")
+
+        assert filename is not None
+        exact = [a for a in attachments if a.get("filename") == filename]
+        if len(exact) == 1:
+            return exact[0]
+
+        needle = filename.lower()
+        partial = [
+            a
+            for a in attachments
+            if needle in (a.get("filename") or "").lower()
+        ]
+        if len(partial) == 1:
+            return partial[0]
+        if len(partial) > 1:
+            names = [a.get("filename") for a in partial]
+            raise ValueError(
+                f"Ambiguous filename {filename!r}; matches: {names}"
+            )
+        available = [a.get("filename") for a in attachments]
+        raise ValueError(
+            f"Attachment {filename!r} not found. Available: {available}"
+        )
+
+    @staticmethod
+    def _resolve_attachment_save_path(
+        issue_key: str, filename: str, save_path: Optional[str]
+    ) -> str:
+        """Resolve destination path for a downloaded attachment."""
+        if save_path:
+            if os.path.isdir(save_path):
+                resolved = os.path.join(save_path, filename)
+            else:
+                resolved = save_path
+            parent = os.path.dirname(os.path.abspath(resolved))
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            return resolved
+
+        safe_key = issue_key.replace("/", "_")
+        directory = os.path.join(
+            tempfile.gettempdir(), "jira-mcp-attachments", safe_key
+        )
+        os.makedirs(directory, exist_ok=True)
+        return os.path.join(directory, filename)
 
     async def add_comment(
         self,
@@ -1084,6 +1251,22 @@ class JiraClient:
             ),
             "attachments": [
                 a.filename for a in getattr(issue.fields, "attachment", []) or []
+            ],
+            "attachment_details": [
+                {
+                    "id": str(getattr(a, "id", "")),
+                    "filename": getattr(a, "filename", ""),
+                    "mime_type": getattr(a, "mimeType", None),
+                    "size": getattr(a, "size", None),
+                    "content_url": getattr(a, "content", None),
+                    "created": getattr(a, "created", None),
+                    "author": (
+                        getattr(a.author, "displayName", None)
+                        if getattr(a, "author", None)
+                        else None
+                    ),
+                }
+                for a in getattr(issue.fields, "attachment", []) or []
             ],
         }
 

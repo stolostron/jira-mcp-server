@@ -99,6 +99,34 @@ class IssueLinkResponse(BaseModel):
     summary: Optional[str] = None
 
 
+class AttachmentUploadResponse(BaseModel):
+    id: str
+    filename: str
+    mime_type: Optional[str] = None
+    size: Optional[int] = None
+    content_url: Optional[str] = None
+
+
+class IssueAttachmentResponse(BaseModel):
+    id: str
+    filename: str
+    mime_type: Optional[str] = None
+    size: Optional[int] = None
+    content_url: Optional[str] = None
+    created: Optional[str] = None
+    author: Optional[str] = None
+
+
+class IssueAttachmentDownloadResponse(BaseModel):
+    issue_key: str
+    attachment_id: str
+    filename: str
+    mime_type: Optional[str] = None
+    size: int
+    save_path: str
+    content_url: Optional[str] = None
+
+
 class IssueResponse(BaseModel):
     key: str
     summary: str
@@ -137,6 +165,7 @@ class IssueResponse(BaseModel):
     contributors: List[str] = []
     issue_links: List[IssueLinkResponse] = []
     attachments: List[str] = []
+    attachment_details: List[IssueAttachmentResponse] = []
 
 
 class ProjectResponse(BaseModel):
@@ -162,14 +191,6 @@ class ComponentResponse(BaseModel):
     lead: str
     assignee_type: str
     is_assignee_type_valid: bool
-
-
-class AttachmentUploadResponse(BaseModel):
-    id: str
-    filename: str
-    mime_type: Optional[str] = None
-    size: Optional[int] = None
-    content_url: Optional[str] = None
 
 
 class CommentResponse(BaseModel):
@@ -875,6 +896,80 @@ class JiraMCPServer:
                 if ctx:
                     await ctx.error(
                         f"Failed to upload attachments to {issue_key}: {str(e)}"
+                    )
+                raise
+
+        @self.mcp.tool()
+        async def list_issue_attachments(
+            issue_key: str,
+            ctx: Optional[Context] = None,
+        ) -> List[IssueAttachmentResponse]:
+            """List attachments on a Jira issue (metadata for download).
+
+            Use download_issue_attachment to save a file locally, then read it
+            with your editor or vision tools for screenshot analysis.
+
+            Args:
+                issue_key: Jira issue key (e.g., 'ACM-26935')
+            """
+            if ctx:
+                await ctx.info(f"Listing attachments for {issue_key}")
+
+            try:
+                items = await self.client.list_issue_attachments(issue_key)
+                if ctx:
+                    await ctx.info(f"Found {len(items)} attachment(s) on {issue_key}")
+                return [IssueAttachmentResponse(**item) for item in items]
+            except Exception as e:
+                if ctx:
+                    await ctx.error(
+                        f"Failed to list attachments for {issue_key}: {str(e)}"
+                    )
+                raise
+
+        @self.mcp.tool()
+        async def download_issue_attachment(
+            issue_key: str,
+            attachment_id: Optional[str] = None,
+            filename: Optional[str] = None,
+            save_path: Optional[str] = None,
+            ctx: Optional[Context] = None,
+        ) -> IssueAttachmentDownloadResponse:
+            """Download an issue attachment to a local file.
+
+            Requires JIRA_EMAIL + JIRA_ACCESS_TOKEN (basic auth), same as uploads.
+            After download, open save_path with Read/image tools to analyze screenshots.
+
+            Args:
+                issue_key: Jira issue key (e.g., 'ACM-26935')
+                attachment_id: Attachment id from list_issue_attachments or
+                    get_issue attachment_details
+                filename: Attachment filename (exact or unique substring match)
+                save_path: Destination file or directory (default:
+                    $TMPDIR/jira-mcp-attachments/<issue_key>/<filename>)
+            """
+            if not attachment_id and not filename:
+                raise ValueError("Provide attachment_id or filename")
+
+            if ctx:
+                await ctx.info(f"Downloading attachment from {issue_key}")
+
+            try:
+                result = await self.client.download_issue_attachment(
+                    issue_key,
+                    attachment_id=attachment_id,
+                    filename=filename,
+                    save_path=save_path,
+                )
+                if ctx:
+                    await ctx.info(
+                        f"Saved {result['filename']} to {result['save_path']}"
+                    )
+                return IssueAttachmentDownloadResponse(**result)
+            except Exception as e:
+                if ctx:
+                    await ctx.error(
+                        f"Failed to download attachment from {issue_key}: {str(e)}"
                     )
                 raise
 
