@@ -986,7 +986,9 @@ class JiraMCPServer:
 
             Args:
                 issue_key: Jira issue key (e.g., 'PROJ-123')
-                comment: Comment text
+                comment: Comment text only (plain text/markdown). Do not include
+                    ``!filename|thumbnail!`` wiki lines; they are appended once from
+                    ``inline_attachment_paths``.
                 security_level: Security level name (default: "Red Hat Employee")
                 attachment_paths: Optional files to upload to the issue before commenting
                 inline_attachment_paths: Subset of attachment_paths to show inline in the

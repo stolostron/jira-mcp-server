@@ -17,6 +17,7 @@
 from jira_mcp_server.comment_attachments import (
     build_wiki_comment_body,
     resolve_inline_filenames,
+    strip_existing_inline_image_markers,
 )
 
 
@@ -45,6 +46,21 @@ def test_resolve_inline_filenames_defaults_to_all_uploaded():
         "one.png",
         "two.png",
     ]
+
+
+def test_strip_existing_inline_image_markers():
+    text = "Verified on build.\n\n" "!dup.png|thumbnail!\n\n" "QA:"
+    assert strip_existing_inline_image_markers(text) == "Verified on build.\n\nQA:"
+
+
+def test_build_wiki_comment_body_dedupes_existing_markers():
+    body = build_wiki_comment_body(
+        "Verified on hub.\n\n!shot.png|thumbnail!\n\nQA:",
+        ["shot.png", "other.png"],
+    )
+    assert body.count("!shot.png|thumbnail!") == 1
+    assert "!other.png|thumbnail!" in body
+    assert "Verified on hub." in body
 
 
 def test_resolve_inline_filenames_subset():

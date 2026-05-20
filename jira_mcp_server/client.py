@@ -350,9 +350,7 @@ class JiraClient:
                     continue
                 data.extend(chunk)
                 if len(data) > max_bytes:
-                    raise ValueError(
-                        f"Attachment exceeds max size ({max_bytes} bytes)"
-                    )
+                    raise ValueError(f"Attachment exceeds max size ({max_bytes} bytes)")
 
             with open(resolved_path, "wb") as handle:
                 handle.write(data)
@@ -389,21 +387,15 @@ class JiraClient:
 
         needle = filename.lower()
         partial = [
-            a
-            for a in attachments
-            if needle in (a.get("filename") or "").lower()
+            a for a in attachments if needle in (a.get("filename") or "").lower()
         ]
         if len(partial) == 1:
             return partial[0]
         if len(partial) > 1:
             names = [a.get("filename") for a in partial]
-            raise ValueError(
-                f"Ambiguous filename {filename!r}; matches: {names}"
-            )
+            raise ValueError(f"Ambiguous filename {filename!r}; matches: {names}")
         available = [a.get("filename") for a in attachments]
-        raise ValueError(
-            f"Attachment {filename!r} not found. Available: {available}"
-        )
+        raise ValueError(f"Attachment {filename!r} not found. Available: {available}")
 
     @staticmethod
     def _resolve_attachment_save_path(

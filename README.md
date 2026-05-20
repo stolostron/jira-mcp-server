@@ -71,20 +71,34 @@ git clone https://github.com/atifshafi/jira-mcp-server.git
 cd jira-mcp-server
 ```
 
-2. Install the package:
+2. Install in a **virtualenv** (recommended for Cursor and other MCP clients):
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/pip install -U pip
+.venv/bin/pip install -e ".[dev]"
+make verify-startup
+```
+
+Or install globally / user site (same as upstream):
+
 ```bash
 pip install -e .
 ```
 
-Or install with development dependencies:
+With development dependencies:
+
 ```bash
 pip install -e ".[dev]"
 ```
 
-> **macOS**: Use `pip3` instead of `pip`:
-> ```bash
-> pip3 install -e .
-> ```
+> **Cursor / IDE:** Point `mcp.json` `command` at `.../jira-mcp-server/.venv/bin/python`
+> with `cwd` set to this repo. Avoid `pip install -e .` on system Python only — a
+> partial `fastmcp` install can break `from fastmcp import Context`.
+
+> **macOS**: Use `pip3` / `.venv/bin/pip` instead of `pip` when not using `make bootstrap`.
+
+> **Quick bootstrap:** `make bootstrap` creates `.venv` and installs `'.[dev]'`.
 
 ## Configuration
 
@@ -760,7 +774,18 @@ jira_mcp_server/
 - Verify the user has access to the requested projects
 - Ensure the access token has necessary scopes
 
-#### 4. Timeout Issues
+#### 4. `ImportError: cannot import name 'Context' from 'fastmcp'`
+
+**Symptoms**: Cursor MCP log shows connection closed; traceback on `from fastmcp import Context, FastMCP`.
+
+**Cause**: `fastmcp` **3.3.x** installs a meta package without server modules unless extras are configured. Global `pip install -e .` against `fastmcp>=3.3.1` can break a previously working 3.2.x install.
+
+**Solutions**:
+- Use the repo virtualenv (recommended): `python3.12 -m venv .venv && .venv/bin/pip install -e '.[dev]'`
+- Point Cursor `mcp.json` `command` at `.../jira-mcp-server/.venv/bin/python`
+- This fork pins `fastmcp>=3.2.4,<3.3` in `pyproject.toml`
+
+#### 5. Timeout Issues
 
 **Symptoms**: Requests timeout or hang
 

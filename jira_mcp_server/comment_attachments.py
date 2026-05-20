@@ -18,7 +18,31 @@ from __future__ import annotations
 
 import mimetypes
 import os
+import re
 from typing import Any, Dict, List, Optional
+
+# Jira wiki inline image syntax (Cloud converts to ADF mediaSingle when attached).
+_WIKI_INLINE_IMAGE = re.compile(r"!\s*([^|!\n]+?)\s*\|thumbnail!", re.IGNORECASE)
+
+
+def strip_existing_inline_image_markers(text: str) -> str:
+    """Remove wiki ``!file|thumbnail!`` markers from comment text.
+
+    Callers should not duplicate markers in ``comment`` when using
+    ``inline_attachment_paths``; MCP appends them once after upload.
+    """
+    without_markers = _WIKI_INLINE_IMAGE.sub("", text or "")
+    lines = [line.rstrip() for line in without_markers.splitlines()]
+    collapsed: List[str] = []
+    for line in lines:
+        if not line.strip():
+            if collapsed and collapsed[-1] != "":
+                collapsed.append("")
+            continue
+        collapsed.append(line)
+    while collapsed and collapsed[-1] == "":
+        collapsed.pop()
+    return "\n".join(collapsed).strip()
 
 
 def build_wiki_comment_body(
@@ -30,7 +54,7 @@ def build_wiki_comment_body(
     Jira Cloud converts ``!filename|thumbnail!`` to ADF ``mediaSingle`` nodes when
     the attachment already exists on the issue (upload before posting comment).
     """
-    text = (comment or "").strip()
+    text = strip_existing_inline_image_markers(comment)
     markers = [f"!{name}|thumbnail!" for name in inline_filenames if name]
     if not markers:
         return text

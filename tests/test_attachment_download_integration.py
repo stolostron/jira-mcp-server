@@ -64,9 +64,7 @@ async def test_download_attachment_by_id(tmp_path, connected_client):
 
 
 @pytest.mark.asyncio
-async def test_download_attachment_by_filename_substring(
-    tmp_path, connected_client
-):
+async def test_download_attachment_by_filename_substring(tmp_path, connected_client):
     items = await connected_client.list_issue_attachments(ISSUE_KEY)
     needle = "Screenshot"
     matches = [i for i in items if needle in i["filename"]]
