@@ -15,7 +15,7 @@ dependencies = [
     "pydantic>=2.13.4",
     "asyncio-throttle>=1.0.2",
     "python-dotenv>=1.2.2",
-    "uvicorn>=0.46.0",
+    "uvicorn>=0.47.0",
     "authlib>=1.7.2",
 ]
 requires-python = ">=3.10"
@@ -26,7 +26,7 @@ license = {text = "MIT"}
 dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
-    "black>=26.3.1",
+    "black>=26.5.1",
     "isort>=8.0.1",
     "mypy>=2.1.0",
     "pip-audit>=2.10.0",
