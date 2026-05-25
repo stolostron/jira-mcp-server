@@ -24,12 +24,12 @@ Run TWO parallel Jira searches using `search_issues`:
 
 **Query 1 — Fix Version:**
 ```
-project = ACM AND fixVersion = "<version>" AND (assignee = "jpacker@redhat.com" OR reporter = "jpacker@redhat.com") ORDER BY status ASC, priority DESC
+project = ACM AND fixVersion = "<version>" AND (assignee = "USER@redhat.com" OR reporter = "USER@redhat.com") ORDER BY status ASC, priority DESC
 ```
 
 **Query 2 — Target Version:**
 ```
-project = ACM AND "Target Version" = "<version>" AND (assignee = "jpacker@redhat.com" OR reporter = "jpacker@redhat.com") ORDER BY status ASC, priority DESC
+project = ACM AND "Target Version" = "<version>" AND (assignee = "USER@redhat.com" OR reporter = "USER@redhat.com") ORDER BY status ASC, priority DESC
 ```
 
 Merge the results, deduplicating by issue key.

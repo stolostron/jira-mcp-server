@@ -960,7 +960,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ### Support
 
 For issues and questions:
-- Check the [Issues](https://github.com/jpacker/jira-mcp-server/issues) page
+- Check the [Issues](https://github.com/stolostron/jira-mcp-server/issues) page
 - Review Jira API documentation
 - Check MCP specification at https://modelcontextprotocol.io/
 
