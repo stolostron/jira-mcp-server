@@ -1,5 +1,10 @@
 # Jira MCP Server
 
+> **Fork of [stolostron/jira-mcp-server](https://github.com/stolostron/jira-mcp-server)**
+> (originally created by Jeff Packer / jnpacker).
+> This fork adds Red Hat custom field support, Jira Cloud migration, and attachment/inline image capabilities.
+> Upstream PR: [stolostron/jira-mcp-server#24](https://github.com/stolostron/jira-mcp-server/pull/24)
+
 A Model Context Protocol (MCP) server that provides seamless integration with Jira instances. This server enables AI applications to interact with Jira issues, projects, and workflows through a standardized interface.
 
 ## Jira Cloud Migration
@@ -818,7 +823,7 @@ Check these locations for error logs:
 
 If you encounter issues:
 
-1. Check the [Issues](https://github.com/your-username/jira-mcp-server/issues) page
+1. Check the [Issues](https://github.com/stolostron/jira-mcp-server/issues) page
 2. Review Jira API documentation
 3. Verify your Jira instance configuration
 4. Test with a simple MCP client first
@@ -1023,7 +1028,7 @@ To connect to multiple Jira instances, create separate MCP server configurations
 
 ### License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ### Contributing
 
