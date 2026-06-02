@@ -34,7 +34,7 @@ async def _run_jira_connection_check() -> None:
     print("📋 Step 1: Loading configuration from .env file...")
     try:
         config = JiraConfig.from_env()
-        print(f"   ✅ Configuration loaded successfully")
+        print("   ✅ Configuration loaded successfully")
         print("   Server URL: [redacted]")
         print("   Email: [redacted]")
         print(f"   Email configured: {bool(config.email)}")

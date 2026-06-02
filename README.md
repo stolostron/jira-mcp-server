@@ -1,5 +1,7 @@
 # Jira MCP Server
 
+[![CI](https://github.com/stolostron/jira-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/stolostron/jira-mcp-server/actions/workflows/ci.yml)
+
 A Model Context Protocol (MCP) server that provides seamless integration with Jira instances. This server enables AI applications to interact with Jira issues, projects, and workflows through a standardized interface.
 
 ## Jira Cloud Migration
@@ -62,7 +64,7 @@ All custom field IDs and work type IDs have been updated in the code. No other c
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/jira-mcp-server.git
+git clone https://github.com/stolostron/jira-mcp-server.git
 cd jira-mcp-server
 ```
 
@@ -628,18 +630,17 @@ This check is non-blocking and fails silently if the repository is not available
 
 ```bash
 make help              # Show available targets
-make tests             # Run all tests in the tests/ directory
+make test              # Run all tests in the tests/ directory
+make lint              # Run ruff linter
+make lint-fix          # Run ruff linter with auto-fix
 make install-commands  # Symlink project commands to ~/.claude/commands/
 ```
 
 ### Running Tests
 
-Run all tests with:
 ```bash
-make tests
+make test
 ```
-
-This runs all test_*.py files using pytest with verbose output.
 
 ### Setting up Development Environment
 
@@ -650,19 +651,29 @@ pip install -e ".[dev]"
 
 2. Run tests:
 ```bash
-make tests
+make test
 ```
 
-3. Format code:
+3. Lint:
+```bash
+make lint       # check
+make lint-fix   # auto-fix
+```
+
+4. Format code:
 ```bash
 black jira_mcp_server/
 isort jira_mcp_server/
 ```
 
-4. Type checking:
+5. Type checking:
 ```bash
 mypy jira_mcp_server/
 ```
+
+### CI
+
+GitHub Actions runs tests (Python 3.10, 3.11, 3.12) and lint on every push to `main` and every pull request. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ### Project Structure
 
@@ -742,7 +753,7 @@ Check these locations for error logs:
 
 If you encounter issues:
 
-1. Check the [Issues](https://github.com/your-username/jira-mcp-server/issues) page
+1. Check the [Issues](https://github.com/stolostron/jira-mcp-server/issues) page
 2. Review Jira API documentation
 3. Verify your Jira instance configuration
 4. Test with a simple MCP client first

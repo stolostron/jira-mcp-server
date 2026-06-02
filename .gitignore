@@ -50,3 +50,5 @@ GEMINI.md
 .claude/settings.local.json
 .claude/settings.json
 .claude/hook-handler.sh
+.claude/skills/
+.claude/agents/

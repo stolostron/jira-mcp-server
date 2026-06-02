@@ -378,7 +378,7 @@ class JiraClient:
                     }
 
             # Create the issue link
-            response = await self._async_call(
+            await self._async_call(
                 lambda: self._jira.create_issue_link(
                     type=link_type,
                     inwardIssue=inward_issue,
