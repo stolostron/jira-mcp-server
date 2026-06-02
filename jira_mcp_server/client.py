@@ -17,16 +17,28 @@
 """Jira client wrapper for MCP server."""
 
 import asyncio
+import json
 import logging
+import os
+import tempfile
 from typing import Any, Dict, List, Optional, cast
 
+import requests
 from asyncio_throttle import Throttler
 from jira import JIRA
 from jira.exceptions import JIRAError
 
+from .comment_attachments import (
+    build_wiki_comment_body,
+    guess_mime_type,
+    resolve_inline_filenames,
+)
 from .config import JiraConfig
 
 logger = logging.getLogger(__name__)
+
+# Cap download size so MCP responses stay bounded (screenshots are typically < 5 MB).
+DEFAULT_ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024
 
 
 class JiraClient:
@@ -198,38 +210,330 @@ class JiraClient:
         except JIRAError as e:
             raise ValueError(f"Failed to transition issue {issue_key}: {e}")
 
-    async def add_comment(
-        self, issue_key: str, comment: str, security_level: Optional[str] = None
+    async def add_issue_attachments(
+        self, issue_key: str, file_paths: List[str]
+    ) -> List[Dict[str, Any]]:
+        """Upload one or more files as issue-level attachments (REST API v3)."""
+        if not self._jira:
+            raise RuntimeError("Not connected to Jira")
+        if not file_paths:
+            return []
+
+        server = self._jira._options["server"]
+        url = f"{server}/rest/api/3/issue/{issue_key}/attachments"
+        uploaded: List[Dict[str, Any]] = []
+
+        for path in file_paths:
+            if not os.path.isfile(path):
+                raise ValueError(f"Attachment file not found: {path}")
+            filename = os.path.basename(path)
+            mime = guess_mime_type(path)
+
+            def _upload(p=path, fn=filename, mt=mime):
+                # Use requests directly: jira-python session sets application/json
+                # and breaks multipart uploads (HTTP 415).
+                with open(p, "rb") as handle:
+                    response = requests.post(
+                        url,
+                        auth=(self.config.email, self.config.access_token),
+                        headers={"X-Atlassian-Token": "no-check"},
+                        files={"file": (fn, handle, mt)},
+                        timeout=self.config.timeout,
+                    )
+                if not response.ok:
+                    raise JIRAError(
+                        f"Attachment upload failed (HTTP {response.status_code}): "
+                        f"{response.text}",
+                        status_code=response.status_code,
+                        url=url,
+                        text=response.text,
+                    )
+                return response.json()
+
+            items = await self._async_call(_upload)
+            for item in items:
+                uploaded.append(
+                    {
+                        "id": item.get("id"),
+                        "filename": item.get("filename"),
+                        "mime_type": item.get("mimeType"),
+                        "size": item.get("size"),
+                        "content_url": item.get("content"),
+                    }
+                )
+
+        return uploaded
+
+    async def list_issue_attachments(self, issue_key: str) -> List[Dict[str, Any]]:
+        """List attachments on an issue with download metadata."""
+        if not self._jira:
+            raise RuntimeError("Not connected to Jira")
+
+        issue = await self._async_call(lambda: self._jira.issue(issue_key))
+        result: List[Dict[str, Any]] = []
+        for attachment in getattr(issue.fields, "attachment", []) or []:
+            author = getattr(attachment, "author", None)
+            result.append(
+                {
+                    "id": str(getattr(attachment, "id", "")),
+                    "filename": getattr(attachment, "filename", ""),
+                    "mime_type": getattr(attachment, "mimeType", None),
+                    "size": getattr(attachment, "size", None),
+                    "content_url": getattr(attachment, "content", None),
+                    "created": getattr(attachment, "created", None),
+                    "author": (
+                        getattr(author, "displayName", None) if author else None
+                    ),
+                }
+            )
+        return result
+
+    async def download_issue_attachment(
+        self,
+        issue_key: str,
+        attachment_id: Optional[str] = None,
+        filename: Optional[str] = None,
+        save_path: Optional[str] = None,
+        max_bytes: int = DEFAULT_ATTACHMENT_MAX_BYTES,
     ) -> Dict[str, Any]:
-        """Add a comment to an issue."""
+        """Download an issue attachment to disk using Jira basic auth.
+
+        Provide *attachment_id* or *filename* (exact match, then single substring match).
+        """
+        if not attachment_id and not filename:
+            raise ValueError("Provide attachment_id or filename")
+
+        attachments = await self.list_issue_attachments(issue_key)
+        if not attachments:
+            raise ValueError(f"No attachments on issue {issue_key}")
+
+        target = self._resolve_issue_attachment(
+            attachments, attachment_id=attachment_id, filename=filename
+        )
+        content_url = target.get("content_url")
+        if not content_url:
+            raise ValueError(
+                f"Attachment {target.get('filename')!r} has no content URL"
+            )
+
+        resolved_path = self._resolve_attachment_save_path(
+            issue_key, target["filename"], save_path
+        )
+
+        def _download() -> int:
+            response = requests.get(
+                content_url,
+                auth=(self.config.email, self.config.access_token),
+                headers={"X-Atlassian-Token": "no-check"},
+                timeout=self.config.timeout,
+                stream=True,
+            )
+            if not response.ok:
+                raise JIRAError(
+                    f"Attachment download failed (HTTP {response.status_code}): "
+                    f"{response.text}",
+                    status_code=response.status_code,
+                    url=content_url,
+                    text=response.text,
+                )
+
+            content_length = response.headers.get("Content-Length")
+            if content_length and int(content_length) > max_bytes:
+                raise ValueError(
+                    f"Attachment too large ({content_length} bytes); "
+                    f"max {max_bytes} bytes"
+                )
+
+            data = bytearray()
+            for chunk in response.iter_content(chunk_size=65536):
+                if not chunk:
+                    continue
+                data.extend(chunk)
+                if len(data) > max_bytes:
+                    raise ValueError(f"Attachment exceeds max size ({max_bytes} bytes)")
+
+            with open(resolved_path, "wb") as handle:
+                handle.write(data)
+            return len(data)
+
+        nbytes = await self._async_call(_download)
+        return {
+            "issue_key": issue_key,
+            "attachment_id": target["id"],
+            "filename": target["filename"],
+            "mime_type": target.get("mime_type"),
+            "size": nbytes,
+            "save_path": os.path.abspath(resolved_path),
+            "content_url": content_url,
+        }
+
+    @staticmethod
+    def _resolve_issue_attachment(
+        attachments: List[Dict[str, Any]],
+        attachment_id: Optional[str] = None,
+        filename: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Pick one attachment by id or filename."""
+        if attachment_id:
+            for item in attachments:
+                if str(item.get("id")) == str(attachment_id):
+                    return item
+            raise ValueError(f"Attachment id {attachment_id!r} not found on issue")
+
+        assert filename is not None
+        exact = [a for a in attachments if a.get("filename") == filename]
+        if len(exact) == 1:
+            return exact[0]
+
+        needle = filename.lower()
+        partial = [
+            a for a in attachments if needle in (a.get("filename") or "").lower()
+        ]
+        if len(partial) == 1:
+            return partial[0]
+        if len(partial) > 1:
+            names = [a.get("filename") for a in partial]
+            raise ValueError(f"Ambiguous filename {filename!r}; matches: {names}")
+        available = [a.get("filename") for a in attachments]
+        raise ValueError(f"Attachment {filename!r} not found. Available: {available}")
+
+    @staticmethod
+    def _resolve_attachment_save_path(
+        issue_key: str, filename: str, save_path: Optional[str]
+    ) -> str:
+        """Resolve destination path for a downloaded attachment."""
+        if save_path:
+            if os.path.isdir(save_path):
+                resolved = os.path.join(save_path, filename)
+            else:
+                resolved = save_path
+            parent = os.path.dirname(os.path.abspath(resolved))
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            return resolved
+
+        safe_key = issue_key.replace("/", "_")
+        directory = os.path.join(
+            tempfile.gettempdir(), "jira-mcp-attachments", safe_key
+        )
+        os.makedirs(directory, exist_ok=True)
+        return os.path.join(directory, filename)
+
+    async def add_comment(
+        self,
+        issue_key: str,
+        comment: str,
+        security_level: Optional[str] = None,
+        attachment_paths: Optional[List[str]] = None,
+        inline_attachment_paths: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Add a comment to an issue.
+
+        When *attachment_paths* is set, files are uploaded to the issue first.
+        Use *inline_attachment_paths* (subset of paths) to embed images in the
+        comment body via Jira wiki markup (``!file.png|thumbnail!``), which Jira
+        Cloud converts to inline ADF. If *inline_attachment_paths* is omitted but
+        *attachment_paths* is set, all uploaded files are embedded inline.
+        """
         if not self._jira:
             raise RuntimeError("Not connected to Jira")
 
         try:
-            issue = await self._async_call(lambda: self._jira.issue(issue_key))
+            uploaded: List[Dict[str, Any]] = []
+            if attachment_paths:
+                uploaded = await self.add_issue_attachments(issue_key, attachment_paths)
 
-            # Build comment parameters
-            comment_kwargs = {}
+            inline_names = resolve_inline_filenames(
+                uploaded, inline_attachment_paths, attachment_paths
+            )
+            body = build_wiki_comment_body(comment, inline_names)
+
+            if uploaded:
+                return await self._add_comment_wiki_v2(
+                    issue_key, body, security_level, uploaded, inline_names
+                )
+
+            issue = await self._async_call(lambda: self._jira.issue(issue_key))
+            comment_kwargs: Dict[str, Any] = {}
             if security_level:
-                # Use 'group' type for security levels like "Red Hat Employee"
                 comment_kwargs["visibility"] = {
                     "type": "group",
                     "value": security_level,
                 }
 
             comment_obj = await self._async_call(
-                lambda: self._jira.add_comment(issue, comment, **comment_kwargs)
+                lambda: self._jira.add_comment(issue, body, **comment_kwargs)
             )
 
-            return {
-                "id": comment_obj.id,
-                "body": comment_obj.body,
-                "author": comment_obj.author.displayName,
-                "created": comment_obj.created,
-                "updated": comment_obj.updated,
-            }
+            return self._comment_result(comment_obj, uploaded=[], inline_filenames=[])
         except JIRAError as e:
             raise ValueError(f"Failed to add comment to {issue_key}: {e}")
+
+    async def _add_comment_wiki_v2(
+        self,
+        issue_key: str,
+        body: str,
+        security_level: Optional[str],
+        uploaded: List[Dict[str, Any]],
+        inline_filenames: List[str],
+    ) -> Dict[str, Any]:
+        """Post a wiki-format comment (v2 API) so inline attachment markup renders."""
+        server = self._jira._options["server"]
+        url = f"{server}/rest/api/2/issue/{issue_key}/comment"
+        payload: Dict[str, Any] = {"body": body}
+        if security_level:
+            payload["visibility"] = {"type": "group", "value": security_level}
+
+        def _post():
+            response = self._jira._session.post(url, json=payload)
+            if not response.ok:
+                raise JIRAError(
+                    f"Comment failed (HTTP {response.status_code}): {response.text}",
+                    status_code=response.status_code,
+                    url=url,
+                    text=response.text,
+                )
+            return response.json()
+
+        data = await self._async_call(_post)
+        author = (data.get("author") or {}).get("displayName", "")
+        raw_body = data.get("body")
+        if isinstance(raw_body, dict):
+            body_repr = json.dumps(raw_body)
+        else:
+            body_repr = str(raw_body or body)
+
+        return {
+            "id": data.get("id"),
+            "body": body_repr,
+            "author": author,
+            "created": data.get("created"),
+            "updated": data.get("updated"),
+            "attachments_uploaded": uploaded,
+            "inline_filenames": inline_filenames,
+        }
+
+    def _comment_result(
+        self,
+        comment_obj: Any,
+        uploaded: List[Dict[str, Any]],
+        inline_filenames: List[str],
+    ) -> Dict[str, Any]:
+        """Normalize a jira-python comment object to MCP response dict."""
+        body = comment_obj.body
+        if isinstance(body, dict):
+            body_repr = json.dumps(body)
+        else:
+            body_repr = str(body)
+        return {
+            "id": comment_obj.id,
+            "body": body_repr,
+            "author": comment_obj.author.displayName,
+            "created": comment_obj.created,
+            "updated": comment_obj.updated,
+            "attachments_uploaded": uploaded,
+            "inline_filenames": inline_filenames,
+        }
 
     async def log_work(
         self,
@@ -800,6 +1104,36 @@ class JiraClient:
 
         return " ".join(parts)
 
+    def _parse_issue_links(self, links) -> List[Dict[str, Any]]:
+        """Parse issue links into structured format."""
+        result = []
+        for link in links or []:
+            try:
+                link_type = getattr(getattr(link, "type", None), "name", "unknown")
+                outward = getattr(link, "outwardIssue", None)
+                inward = getattr(link, "inwardIssue", None)
+                target = outward or inward
+                if not target:
+                    continue
+
+                key = getattr(target, "key", None)
+                if not key:
+                    continue
+
+                summary = getattr(getattr(target, "fields", None), "summary", None)
+                result.append(
+                    {
+                        "type": link_type,
+                        "direction": "outward" if outward else "inward",
+                        "key": key,
+                        "summary": summary,
+                    }
+                )
+            except (AttributeError, KeyError, TypeError):
+                logger.debug("Skipping malformed issue link %r", link, exc_info=True)
+                continue
+        return result
+
     def _issue_to_dict(self, issue: Any) -> Dict[str, Any]:
         """Convert Jira issue object to dictionary."""
         result = {
@@ -848,34 +1182,28 @@ class JiraClient:
             ],
             "target_version": [
                 v.name for v in getattr(issue.fields, "customfield_10855", []) or []
-            ],  # Target Version custom field
+            ],
             "work_type": self._extract_custom_field_value(
                 getattr(issue.fields, "customfield_10464", None)
-            ),  # Activity Type (formerly Work Type)
+            ),
             "security_level": (
                 getattr(issue.fields.security, "name", None)
                 if getattr(issue.fields, "security", None)
                 else None
             ),
             "due_date": getattr(issue.fields, "duedate", None),
-            "target_start": getattr(
-                issue.fields, "customfield_10022", None
-            ),  # Target Start custom field
-            "target_end": getattr(
-                issue.fields, "customfield_10023", None
-            ),  # Target End custom field
+            "target_start": getattr(issue.fields, "customfield_10022", None),
+            "target_end": getattr(issue.fields, "customfield_10023", None),
             "original_estimate": self._seconds_to_time_string(
                 cast(Optional[int], getattr(issue.fields, "timeoriginalestimate", None))
             ),
-            "story_points": getattr(
-                issue.fields, "customfield_10028", None
-            ),  # Story points custom field
+            "story_points": getattr(issue.fields, "customfield_10028", None),
             "git_commit": self._extract_custom_field_value(
                 getattr(issue.fields, "customfield_10583", None)
-            ),  # Git Commit custom field
+            ),
             "git_pull_requests": self._extract_git_pull_requests(
                 getattr(issue.fields, "customfield_10875", None)
-            ),  # Git Pull Requests custom field
+            ),
             "subtasks": [
                 {
                     "key": subtask.key,
@@ -894,6 +1222,90 @@ class JiraClient:
                 if getattr(issue.fields, "parent", None)
                 else None
             ),
+            "sprint": self._extract_sprint(
+                getattr(issue.fields, "customfield_10020", None)
+            ),
+            "qa_contact": self._extract_user_display_name(
+                getattr(issue.fields, "customfield_10470", None)
+            ),
+            "severity": self._extract_custom_field_value(
+                getattr(issue.fields, "customfield_10840", None)
+            ),
+            "affects_versions": [
+                v.name for v in getattr(issue.fields, "versions", []) or []
+            ],
+            "acceptance_criteria": getattr(issue.fields, "customfield_10718", None),
+            "contributors": self._extract_user_list(
+                getattr(issue.fields, "customfield_10466", None)
+            ),
+            "issue_links": self._parse_issue_links(
+                getattr(issue.fields, "issuelinks", []) or []
+            ),
+            "attachments": [
+                a.filename for a in getattr(issue.fields, "attachment", []) or []
+            ],
+            "attachment_details": [
+                {
+                    "id": str(getattr(a, "id", "")),
+                    "filename": getattr(a, "filename", ""),
+                    "mime_type": getattr(a, "mimeType", None),
+                    "size": getattr(a, "size", None),
+                    "content_url": getattr(a, "content", None),
+                    "created": getattr(a, "created", None),
+                    "author": (
+                        getattr(a.author, "displayName", None)
+                        if getattr(a, "author", None)
+                        else None
+                    ),
+                }
+                for a in getattr(issue.fields, "attachment", []) or []
+            ],
         }
 
+        return result
+
+    @staticmethod
+    def _extract_sprint(sprint_data) -> Optional[str]:
+        """Extract sprint name from Jira Cloud sprint field.
+
+        The field may be: a list of sprint objects (with .name), a list of
+        strings, a single object, or None.  Returns the name of the last
+        (most recent) sprint.
+        """
+        if not sprint_data:
+            return None
+        items = sprint_data if isinstance(sprint_data, list) else [sprint_data]
+        if not items:
+            return None
+        last = items[-1]
+        if hasattr(last, "name"):
+            return last.name
+        return str(last) if last else None
+
+    @staticmethod
+    def _extract_user_display_name(field_value) -> Optional[str]:
+        """Extract display name from a user-type field (may be object or string)."""
+        if field_value is None:
+            return None
+        if hasattr(field_value, "displayName"):
+            return field_value.displayName
+        return str(field_value) if field_value else None
+
+    @staticmethod
+    def _extract_user_list(field_value) -> List[str]:
+        """Extract list of display names from a multi-user field (may be strings or objects)."""
+        if not field_value:
+            return []
+        if isinstance(field_value, str):
+            field_value = [field_value]
+        elif not isinstance(field_value, (list, tuple)):
+            field_value = [field_value]
+        result = []
+        for item in field_value:
+            if hasattr(item, "displayName"):
+                result.append(item.displayName)
+            elif isinstance(item, str):
+                result.append(item)
+            else:
+                result.append(str(item))
         return result

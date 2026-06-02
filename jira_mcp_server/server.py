@@ -39,6 +39,20 @@ logger = logging.getLogger(__name__)
 EARLY_STATUSES = {"new", "backlog", "in progress"}
 
 
+def _user_ref(identifier: str) -> Dict[str, str]:
+    """Build a user reference dict for Jira Cloud.
+
+    Only accountId is valid on Jira Cloud (name was deprecated for privacy).
+    Atlassian accountIds are opaque 1-128 character strings -- we accept any
+    non-empty value and let the Jira API reject truly invalid ones.
+    Use search_users to resolve a display name or email to an accountId first.
+    """
+    ident = identifier.strip() if isinstance(identifier, str) else ""
+    if not ident:
+        raise ValueError("User identifier cannot be empty")
+    return {"accountId": ident}
+
+
 def _validate_git_commit_sha(sha: str) -> None:
     """Validate that a git commit SHA is either 40 characters (SHA-1) or 64 characters (SHA-256).
 
@@ -78,6 +92,41 @@ class ParentResponse(BaseModel):
     issue_type: str
 
 
+class IssueLinkResponse(BaseModel):
+    type: str
+    direction: str
+    key: str
+    summary: Optional[str] = None
+
+
+class AttachmentUploadResponse(BaseModel):
+    id: str
+    filename: str
+    mime_type: Optional[str] = None
+    size: Optional[int] = None
+    content_url: Optional[str] = None
+
+
+class IssueAttachmentResponse(BaseModel):
+    id: str
+    filename: str
+    mime_type: Optional[str] = None
+    size: Optional[int] = None
+    content_url: Optional[str] = None
+    created: Optional[str] = None
+    author: Optional[str] = None
+
+
+class IssueAttachmentDownloadResponse(BaseModel):
+    issue_key: str
+    attachment_id: str
+    filename: str
+    mime_type: Optional[str] = None
+    size: int
+    save_path: str
+    content_url: Optional[str] = None
+
+
 class IssueResponse(BaseModel):
     key: str
     summary: str
@@ -108,6 +157,15 @@ class IssueResponse(BaseModel):
     git_pull_requests: Optional[str]
     subtasks: List[SubtaskResponse]
     parent: Optional[ParentResponse]
+    sprint: Optional[str] = None
+    qa_contact: Optional[str] = None
+    severity: Optional[str] = None
+    affects_versions: List[str] = []
+    acceptance_criteria: Optional[str] = None
+    contributors: List[str] = []
+    issue_links: List[IssueLinkResponse] = []
+    attachments: List[str] = []
+    attachment_details: List[IssueAttachmentResponse] = []
 
 
 class ProjectResponse(BaseModel):
@@ -141,6 +199,8 @@ class CommentResponse(BaseModel):
     author: str
     created: str
     updated: str
+    attachments_uploaded: List[AttachmentUploadResponse] = []
+    inline_filenames: List[str] = []
 
 
 class WorkLogResponse(BaseModel):
@@ -357,6 +417,11 @@ class JiraMCPServer:
             git_pull_requests: Optional[str] = None,
             parent: Optional[str] = None,
             epic_name: Optional[str] = None,
+            qa_contact: Optional[str] = None,
+            severity: Optional[str] = None,
+            affects_versions: Optional[List[str]] = None,
+            acceptance_criteria: Optional[str] = None,
+            contributors: Optional[List[str]] = None,
             ctx: Optional[Context] = None,
         ) -> IssueResponse:
             """Create a new Jira issue.
@@ -397,6 +462,11 @@ class JiraMCPServer:
                     for all hierarchy levels: Story to Epic, Epic to Feature,
                     sub-tasks, etc.
                 epic_name: Epic Name (required for Epic issue type)
+                qa_contact: QA Contact accountId (use search_users to find accountId first)
+                severity: Severity value (e.g., 'Important', 'Critical', 'Major', 'Moderate', 'Low')
+                affects_versions: List of affected version names (e.g., ['ACM 2.16.0'])
+                acceptance_criteria: Acceptance criteria text
+                contributors: List of contributor accountIds (use search_users to find accountIds first)
                 ctx: MCP context for progress reporting
             """
             # Validate required fields
@@ -467,6 +537,31 @@ class JiraMCPServer:
                 fields["parent"] = {"key": parent}
             if epic_name:
                 fields["customfield_10011"] = epic_name
+            if qa_contact is not None:
+                qa_val = qa_contact.strip() if isinstance(qa_contact, str) else ""
+                if qa_val:
+                    fields["customfield_10470"] = _user_ref(qa_val)
+            if severity is not None:
+                if not isinstance(severity, str) or not severity.strip():
+                    raise ValueError("severity must be a non-empty string")
+                fields["customfield_10840"] = {"value": severity.strip()}
+            if affects_versions is not None:
+                cleaned_versions = []
+                for version in affects_versions:
+                    if not isinstance(version, str) or not version.strip():
+                        raise ValueError(
+                            "affects_versions entries must be non-empty strings"
+                        )
+                    cleaned_versions.append({"name": version.strip()})
+                fields["versions"] = cleaned_versions
+            if acceptance_criteria is not None:
+                fields["customfield_10718"] = acceptance_criteria
+            if contributors is not None:
+                cleaned = [
+                    c.strip() for c in contributors if isinstance(c, str) and c.strip()
+                ]
+                if cleaned:
+                    fields["customfield_10466"] = [_user_ref(c) for c in cleaned]
 
             try:
                 issue = await self.client.create_issue(
@@ -519,6 +614,11 @@ class JiraMCPServer:
             git_commit: Optional[str] = None,
             git_pull_requests: Optional[str] = None,
             parent: Optional[str] = None,
+            qa_contact: Optional[str] = None,
+            severity: Optional[str] = None,
+            affects_versions: Optional[List[str]] = None,
+            acceptance_criteria: Optional[str] = None,
+            contributors: Optional[List[str]] = None,
             ctx: Optional[Context] = None,
         ) -> IssueResponse:
             """Update an existing Jira issue.
@@ -553,6 +653,11 @@ class JiraMCPServer:
                 parent: Parent issue key for hierarchy (e.g., 'PROJ-123'). Works
                     for all hierarchy levels: Story to Epic, Epic to Feature,
                     sub-tasks, etc.
+                qa_contact: QA Contact accountId (use search_users to find accountId first)
+                severity: Severity value (e.g., 'Important', 'Critical', 'Major', 'Moderate', 'Low')
+                affects_versions: List of affected version names (e.g., ['ACM 2.16.0'])
+                acceptance_criteria: Acceptance criteria text
+                contributors: List of contributor accountIds (use search_users to find accountIds first)
                 ctx: MCP context for progress reporting
             """
             if ctx:
@@ -610,6 +715,31 @@ class JiraMCPServer:
                 )
             if parent:
                 fields["parent"] = {"key": parent}
+            if qa_contact is not None:
+                qa_val = qa_contact.strip() if isinstance(qa_contact, str) else ""
+                if qa_val:
+                    fields["customfield_10470"] = _user_ref(qa_val)
+            if severity is not None:
+                if not isinstance(severity, str) or not severity.strip():
+                    raise ValueError("severity must be a non-empty string")
+                fields["customfield_10840"] = {"value": severity.strip()}
+            if affects_versions is not None:
+                cleaned_versions = []
+                for version in affects_versions:
+                    if not isinstance(version, str) or not version.strip():
+                        raise ValueError(
+                            "affects_versions entries must be non-empty strings"
+                        )
+                    cleaned_versions.append({"name": version.strip()})
+                fields["versions"] = cleaned_versions
+            if acceptance_criteria is not None:
+                fields["customfield_10718"] = acceptance_criteria
+            if contributors is not None:
+                cleaned = [
+                    c.strip() for c in contributors if isinstance(c, str) and c.strip()
+                ]
+                if cleaned:
+                    fields["customfield_10466"] = [_user_ref(c) for c in cleaned]
 
             if not fields:
                 raise ValueError(
@@ -734,18 +864,136 @@ class JiraMCPServer:
                 raise
 
         @self.mcp.tool()
+        async def add_issue_attachments(
+            issue_key: str,
+            file_paths: List[str],
+            ctx: Optional[Context] = None,
+        ) -> List[AttachmentUploadResponse]:
+            """Upload files as issue-level attachments (not embedded in a comment).
+
+            Use add_comment with attachment_paths when you need the image inline
+            in the comment body (QE verification screenshots).
+
+            Args:
+                issue_key: Jira issue key (e.g., 'ACM-29818')
+                file_paths: Absolute or relative paths to files to upload
+            """
+            if ctx:
+                await ctx.info(
+                    f"Uploading {len(file_paths)} attachment(s) to {issue_key}"
+                )
+
+            try:
+                uploaded = await self.client.add_issue_attachments(
+                    issue_key, file_paths
+                )
+                if ctx:
+                    await ctx.info(
+                        f"Uploaded {len(uploaded)} attachment(s) to {issue_key}"
+                    )
+                return [AttachmentUploadResponse(**item) for item in uploaded]
+            except Exception as e:
+                if ctx:
+                    await ctx.error(
+                        f"Failed to upload attachments to {issue_key}: {str(e)}"
+                    )
+                raise
+
+        @self.mcp.tool()
+        async def list_issue_attachments(
+            issue_key: str,
+            ctx: Optional[Context] = None,
+        ) -> List[IssueAttachmentResponse]:
+            """List attachments on a Jira issue (metadata for download).
+
+            Use download_issue_attachment to save a file locally, then read it
+            with your editor or vision tools for screenshot analysis.
+
+            Args:
+                issue_key: Jira issue key (e.g., 'ACM-26935')
+            """
+            if ctx:
+                await ctx.info(f"Listing attachments for {issue_key}")
+
+            try:
+                items = await self.client.list_issue_attachments(issue_key)
+                if ctx:
+                    await ctx.info(f"Found {len(items)} attachment(s) on {issue_key}")
+                return [IssueAttachmentResponse(**item) for item in items]
+            except Exception as e:
+                if ctx:
+                    await ctx.error(
+                        f"Failed to list attachments for {issue_key}: {str(e)}"
+                    )
+                raise
+
+        @self.mcp.tool()
+        async def download_issue_attachment(
+            issue_key: str,
+            attachment_id: Optional[str] = None,
+            filename: Optional[str] = None,
+            save_path: Optional[str] = None,
+            ctx: Optional[Context] = None,
+        ) -> IssueAttachmentDownloadResponse:
+            """Download an issue attachment to a local file.
+
+            Requires JIRA_EMAIL + JIRA_ACCESS_TOKEN (basic auth), same as uploads.
+            After download, open save_path with Read/image tools to analyze screenshots.
+
+            Args:
+                issue_key: Jira issue key (e.g., 'ACM-26935')
+                attachment_id: Attachment id from list_issue_attachments or
+                    get_issue attachment_details
+                filename: Attachment filename (exact or unique substring match)
+                save_path: Destination file or directory (default:
+                    $TMPDIR/jira-mcp-attachments/<issue_key>/<filename>)
+            """
+            if not attachment_id and not filename:
+                raise ValueError("Provide attachment_id or filename")
+
+            if ctx:
+                await ctx.info(f"Downloading attachment from {issue_key}")
+
+            try:
+                result = await self.client.download_issue_attachment(
+                    issue_key,
+                    attachment_id=attachment_id,
+                    filename=filename,
+                    save_path=save_path,
+                )
+                if ctx:
+                    await ctx.info(
+                        f"Saved {result['filename']} to {result['save_path']}"
+                    )
+                return IssueAttachmentDownloadResponse(**result)
+            except Exception as e:
+                if ctx:
+                    await ctx.error(
+                        f"Failed to download attachment from {issue_key}: {str(e)}"
+                    )
+                raise
+
+        @self.mcp.tool()
         async def add_comment(
             issue_key: str,
             comment: str,
             security_level: Optional[str] = "Red Hat Employee",
+            attachment_paths: Optional[List[str]] = None,
+            inline_attachment_paths: Optional[List[str]] = None,
             ctx: Optional[Context] = None,
         ) -> CommentResponse:
             """Add a comment to a Jira issue.
 
             Args:
                 issue_key: Jira issue key (e.g., 'PROJ-123')
-                comment: Comment text
+                comment: Comment text only (plain text/markdown). Do not include
+                    ``!filename|thumbnail!`` wiki lines; they are appended once from
+                    ``inline_attachment_paths``.
                 security_level: Security level name (default: "Red Hat Employee")
+                attachment_paths: Optional files to upload to the issue before commenting
+                inline_attachment_paths: Subset of attachment_paths to show inline in the
+                    comment (wiki ``!filename|thumbnail!``). When attachment_paths is set
+                    and this is omitted, all uploaded files are embedded inline.
                 ctx: MCP context for progress reporting
             """
             if ctx:
@@ -753,7 +1001,11 @@ class JiraMCPServer:
 
             try:
                 comment_data = await self.client.add_comment(
-                    issue_key, comment, security_level
+                    issue_key,
+                    comment,
+                    security_level,
+                    attachment_paths=attachment_paths,
+                    inline_attachment_paths=inline_attachment_paths,
                 )
                 if ctx:
                     await ctx.info(f"Added comment to issue: {issue_key}")

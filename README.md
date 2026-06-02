@@ -1,5 +1,10 @@
 # Jira MCP Server
 
+> **Fork of [stolostron/jira-mcp-server](https://github.com/stolostron/jira-mcp-server)**
+> (originally created by Jeff Packer / jnpacker).
+> This fork adds Red Hat custom field support, Jira Cloud migration, and attachment/inline image capabilities.
+> Upstream PR: [stolostron/jira-mcp-server#24](https://github.com/stolostron/jira-mcp-server/pull/24)
+
 A Model Context Protocol (MCP) server that provides seamless integration with Jira instances. This server enables AI applications to interact with Jira issues, projects, and workflows through a standardized interface.
 
 ## Jira Cloud Migration
@@ -57,29 +62,48 @@ All custom field IDs and work type IDs have been updated in the code. No other c
 - **Type Safety**: Pydantic models for structured data validation
 - **Multiple Transports**: Support for both STDIO and SSE (HTTP) transports
 - **Client Integration**: Works with Claude Code, Gemini CLI, Cursor, and other MCP clients
+- **Issue attachments**: Upload files to issues (`add_issue_attachments`)
+- **Download issue attachments**: List and download reporter screenshots
+  (`list_issue_attachments`, `download_issue_attachment`) for vision/analysis
+- **Inline comment images**: Embed screenshots in comments via `add_comment` with
+  `attachment_paths` / `inline_attachment_paths` (Jira wiki → ADF on Cloud)
 
 ## Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/jira-mcp-server.git
+git clone https://github.com/atifshafi/jira-mcp-server.git
 cd jira-mcp-server
 ```
 
-2. Install the package:
+2. Install in a **virtualenv** (recommended for Cursor and other MCP clients):
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/pip install -U pip
+.venv/bin/pip install -e ".[dev]"
+make verify-startup
+```
+
+Or install globally / user site (same as upstream):
+
 ```bash
 pip install -e .
 ```
 
-Or install with development dependencies:
+With development dependencies:
+
 ```bash
 pip install -e ".[dev]"
 ```
 
-> **macOS**: Use `pip3` instead of `pip`:
-> ```bash
-> pip3 install -e .
-> ```
+> **Cursor / IDE:** Point `mcp.json` `command` at `.../jira-mcp-server/.venv/bin/python`
+> with `cwd` set to this repo. Avoid `pip install -e .` on system Python only — a
+> partial `fastmcp` install can break `from fastmcp import Context`.
+
+> **macOS**: Use `pip3` / `.venv/bin/pip` instead of `pip` when not using `make bootstrap`.
+
+> **Quick bootstrap:** `make bootstrap` creates `.venv` and installs `'.[dev]'`.
 
 ## Configuration
 
@@ -415,12 +439,58 @@ transition_issue(
 **Note:** Transitions beyond "New", "Backlog", and "In Progress" require `fix_version` to be set on the issue. This ensures all completed work is tied to a release version.
 
 ### `add_comment`
-Add a comment to an issue:
+Add a comment to an issue. Optional attachments embed inline in the comment (QE verification screenshots):
+
 ```python
 add_comment(
-    issue_key="PROJ-123",
-    comment="This has been resolved"
+    issue_key="ACM-29818",
+    comment="Verified on 2.17.0-DOWNSTREAM-2026-05-20 (CSV 2.17.0), closing the ticket.",
+    attachment_paths=["/path/to/screenshot.png"],
+    inline_attachment_paths=["/path/to/screenshot.png"],
 )
+```
+
+When `attachment_paths` is set, files upload first; `inline_attachment_paths` (subset) are embedded via wiki
+`!filename|thumbnail!` in the comment body. If `inline_attachment_paths` is omitted, all uploaded files are inlined.
+
+### `add_issue_attachments`
+Upload files to the issue Attachments section only (no comment):
+
+```python
+add_issue_attachments(
+    issue_key="ACM-29818",
+    file_paths=["/path/to/evidence.png"],
+)
+```
+
+### `list_issue_attachments`
+List attachment metadata (id, filename, size, content URL) for an issue:
+
+```python
+list_issue_attachments(issue_key="ACM-26935")
+```
+
+`get_issue` also returns `attachment_details` with the same fields (filenames remain in `attachments`).
+
+### `download_issue_attachment`
+Download an attachment to disk (basic auth with `JIRA_EMAIL` + `JIRA_ACCESS_TOKEN`):
+
+```python
+download_issue_attachment(
+    issue_key="ACM-26935",
+    filename="Screenshot 2025-11-25 at 1.30.51 PM.png",
+    save_path="/tmp/acm26935-reporter.png",
+)
+```
+
+Default save location: `$TMPDIR/jira-mcp-attachments/<issue_key>/<filename>`. Max download size 15 MB.
+
+Filenames from Jira may include special Unicode spaces (e.g. narrow no-break space before `PM` in reporter screenshots). Prefer `attachment_id` from `list_issue_attachments`, or a unique substring such as `Screenshot`.
+
+**Integration tests** (live Red Hat Jira; loads creds from `~/.cursor/mcp.json` when `JIRA_RUN_INTEGRATION=1`):
+
+```bash
+JIRA_RUN_INTEGRATION=1 pytest tests/test_attachment_download_integration.py -v
 ```
 
 ### `link_issue`
@@ -709,7 +779,18 @@ jira_mcp_server/
 - Verify the user has access to the requested projects
 - Ensure the access token has necessary scopes
 
-#### 4. Timeout Issues
+#### 4. `ImportError: cannot import name 'Context' from 'fastmcp'`
+
+**Symptoms**: Cursor MCP log shows connection closed; traceback on `from fastmcp import Context, FastMCP`.
+
+**Cause**: `fastmcp` **3.3.x** installs a meta package without server modules unless extras are configured. Global `pip install -e .` against `fastmcp>=3.3.1` can break a previously working 3.2.x install.
+
+**Solutions**:
+- Use the repo virtualenv (recommended): `python3.12 -m venv .venv && .venv/bin/pip install -e '.[dev]'`
+- Point Cursor `mcp.json` `command` at `.../jira-mcp-server/.venv/bin/python`
+- This fork pins `fastmcp>=3.2.4,<3.3` in `pyproject.toml`
+
+#### 5. Timeout Issues
 
 **Symptoms**: Requests timeout or hang
 
@@ -742,7 +823,7 @@ Check these locations for error logs:
 
 If you encounter issues:
 
-1. Check the [Issues](https://github.com/your-username/jira-mcp-server/issues) page
+1. Check the [Issues](https://github.com/stolostron/jira-mcp-server/issues) page
 2. Review Jira API documentation
 3. Verify your Jira instance configuration
 4. Test with a simple MCP client first
@@ -947,7 +1028,7 @@ To connect to multiple Jira instances, create separate MCP server configurations
 
 ### License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ### Contributing
 
