@@ -16,10 +16,8 @@
 
 """Main MCP server implementation for Jira."""
 
-import asyncio
 import logging
 import os
-import re
 import subprocess
 from typing import Any, Dict, List, Optional
 
