@@ -849,9 +849,9 @@ class JiraClient:
             "target_version": [
                 v.name for v in getattr(issue.fields, "customfield_10855", []) or []
             ],  # Target Version custom field
-            "work_type": self._extract_custom_field_value(
+            "activity_type": self._extract_custom_field_value(
                 getattr(issue.fields, "customfield_10464", None)
-            ),  # Activity Type (formerly Work Type)
+            ),  # Activity Type
             "security_level": (
                 getattr(issue.fields.security, "name", None)
                 if getattr(issue.fields, "security", None)

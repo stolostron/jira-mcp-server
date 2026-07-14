@@ -20,7 +20,7 @@ Type `/jira-create` or `/jira create` to start the interactive issue creation pr
 - Labels (including Train-* labels)
 - Fix version/target release
 - Assignee (suggests "assign to me")
-- Work type
+- Activity Type
 - Original time estimate
 - Story points
 - Target Start (defaults to today's date)
