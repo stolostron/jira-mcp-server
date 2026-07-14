@@ -56,17 +56,25 @@ def _resolve_activity_type(value: str) -> str:
 
     Accepts either the human-readable label (e.g. "Security & Compliance") or
     the numeric option ID (e.g. "10609") and always returns the numeric ID
-    string expected by Jira's API. If the value is not a recognized label, it
-    is assumed to already be a numeric ID (or unknown) and is passed through
-    unchanged.
+    string expected by Jira's API. If the value is neither a recognized label
+    nor a numeric ID, a ValueError is raised so the caller doesn't silently
+    submit an invalid value to Jira.
 
     Args:
         value: The activity type label or numeric ID
 
     Returns:
         The numeric ID string
+
+    Raises:
+        ValueError: If the value is not a recognized label or numeric ID
     """
-    return ACTIVITY_TYPE_MAP.get(value, str(value))
+    if value in ACTIVITY_TYPE_MAP:
+        return ACTIVITY_TYPE_MAP[value]
+    if value.lstrip("-").isdigit():
+        return value
+    supported = ", ".join(ACTIVITY_TYPE_MAP.keys())
+    raise ValueError(f"Unknown Activity Type: {value!r}. Supported labels: {supported}")
 
 
 def _validate_git_commit_sha(sha: str) -> None:

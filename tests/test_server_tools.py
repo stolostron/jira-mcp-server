@@ -128,10 +128,12 @@ class TestResolveActivityType:
     def test_numeric_id_passes_through(self):
         assert _resolve_activity_type("10609") == "10609"
 
-    def test_unknown_value_passes_through(self):
-        assert _resolve_activity_type("Not A Real Activity Type") == (
-            "Not A Real Activity Type"
-        )
+    def test_negative_numeric_id_passes_through(self):
+        assert _resolve_activity_type("-1") == "-1"
+
+    def test_unknown_value_raises(self):
+        with pytest.raises(ValueError, match="Unknown Activity Type"):
+            _resolve_activity_type("Not A Real Activity Type")
 
 
 # ─── create_issue ────────────────────────────────────────────────────────────
@@ -235,6 +237,24 @@ class TestCreateIssue:
 
         call_kwargs = server.client.create_issue.call_args.kwargs
         assert call_kwargs["customfield_10464"] == {"id": "10609"}
+
+    @pytest.mark.asyncio
+    async def test_unknown_activity_type_raises(self, server):
+        server.client.create_issue = AsyncMock(return_value=FAKE_ISSUE)
+
+        async with Client(server.mcp) as client:
+            with pytest.raises(Exception):
+                await client.call_tool(
+                    "create_issue",
+                    {
+                        "project_key": "TEST",
+                        "summary": "Fix it",
+                        "description": "desc",
+                        "activity_type": "Not A Real Activity Type",
+                    },
+                )
+
+        server.client.create_issue.assert_not_called()
 
 
 # ─── update_issue ────────────────────────────────────────────────────────────
