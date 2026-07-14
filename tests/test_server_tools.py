@@ -20,7 +20,11 @@ from unittest.mock import AsyncMock
 import pytest
 from fastmcp import Client
 
-from jira_mcp_server.server import JiraMCPServer, _validate_git_commit_sha
+from jira_mcp_server.server import (
+    JiraMCPServer,
+    _resolve_activity_type,
+    _validate_git_commit_sha,
+)
 
 # ─── Fixtures ───────────────────────────────────────────────────────────────
 
@@ -49,7 +53,7 @@ FAKE_ISSUE = {
     "url": "https://test.atlassian.net/browse/TEST-1",
     "fix_versions": [],
     "target_version": [],
-    "work_type": None,
+    "activity_type": None,
     "security_level": None,
     "due_date": None,
     "target_start": None,
@@ -98,6 +102,38 @@ class TestValidateGitCommitSha:
     def test_non_hex_characters_raise(self):
         with pytest.raises(ValueError, match="hexadecimal"):
             _validate_git_commit_sha("z" * 40)
+
+
+# ─── _resolve_activity_type ──────────────────────────────────────────────────
+
+
+class TestResolveActivityType:
+    def test_label_resolves_to_numeric_id(self):
+        assert _resolve_activity_type("Security & Compliance") == "10609"
+
+    def test_all_known_labels_resolve(self):
+        expected = {
+            "None": "-1",
+            "Associate Wellness & Development": "10604",
+            "BU Features": "10605",
+            "Future Sustainability": "10606",
+            "Incidents & Support": "10607",
+            "Quality / Stability / Reliability": "10608",
+            "Security & Compliance": "10609",
+            "Product / Portfolio Work": "10610",
+        }
+        for label, numeric_id in expected.items():
+            assert _resolve_activity_type(label) == numeric_id
+
+    def test_numeric_id_passes_through(self):
+        assert _resolve_activity_type("10609") == "10609"
+
+    def test_negative_numeric_id_passes_through(self):
+        assert _resolve_activity_type("-1") == "-1"
+
+    def test_unknown_value_raises(self):
+        with pytest.raises(ValueError, match="Unknown Activity Type"):
+            _resolve_activity_type("Not A Real Activity Type")
 
 
 # ─── create_issue ────────────────────────────────────────────────────────────
@@ -166,6 +202,60 @@ class TestCreateIssue:
                     },
                 )
 
+    @pytest.mark.asyncio
+    async def test_activity_type_label_resolved_to_numeric_id(self, server):
+        server.client.create_issue = AsyncMock(return_value=FAKE_ISSUE)
+
+        async with Client(server.mcp) as client:
+            await client.call_tool(
+                "create_issue",
+                {
+                    "project_key": "TEST",
+                    "summary": "Fix it",
+                    "description": "desc",
+                    "activity_type": "Security & Compliance",
+                },
+            )
+
+        call_kwargs = server.client.create_issue.call_args.kwargs
+        assert call_kwargs["customfield_10464"] == {"id": "10609"}
+
+    @pytest.mark.asyncio
+    async def test_activity_type_numeric_id_passthrough(self, server):
+        server.client.create_issue = AsyncMock(return_value=FAKE_ISSUE)
+
+        async with Client(server.mcp) as client:
+            await client.call_tool(
+                "create_issue",
+                {
+                    "project_key": "TEST",
+                    "summary": "Fix it",
+                    "description": "desc",
+                    "activity_type": "10609",
+                },
+            )
+
+        call_kwargs = server.client.create_issue.call_args.kwargs
+        assert call_kwargs["customfield_10464"] == {"id": "10609"}
+
+    @pytest.mark.asyncio
+    async def test_unknown_activity_type_raises(self, server):
+        server.client.create_issue = AsyncMock(return_value=FAKE_ISSUE)
+
+        async with Client(server.mcp) as client:
+            with pytest.raises(Exception):
+                await client.call_tool(
+                    "create_issue",
+                    {
+                        "project_key": "TEST",
+                        "summary": "Fix it",
+                        "description": "desc",
+                        "activity_type": "Not A Real Activity Type",
+                    },
+                )
+
+        server.client.create_issue.assert_not_called()
+
 
 # ─── update_issue ────────────────────────────────────────────────────────────
 
@@ -190,6 +280,32 @@ class TestUpdateIssue:
         server.client.update_issue.assert_called_once()
         call_kwargs = server.client.update_issue.call_args
         assert call_kwargs[0][0] == "TEST-1"
+
+    @pytest.mark.asyncio
+    async def test_activity_type_label_resolved_to_numeric_id(self, server):
+        server.client.update_issue = AsyncMock(return_value=FAKE_ISSUE)
+
+        async with Client(server.mcp) as client:
+            await client.call_tool(
+                "update_issue",
+                {"issue_key": "TEST-1", "activity_type": "Security & Compliance"},
+            )
+
+        call_kwargs = server.client.update_issue.call_args.kwargs
+        assert call_kwargs["customfield_10464"] == {"id": "10609"}
+
+    @pytest.mark.asyncio
+    async def test_activity_type_numeric_id_passthrough(self, server):
+        server.client.update_issue = AsyncMock(return_value=FAKE_ISSUE)
+
+        async with Client(server.mcp) as client:
+            await client.call_tool(
+                "update_issue",
+                {"issue_key": "TEST-1", "activity_type": "10609"},
+            )
+
+        call_kwargs = server.client.update_issue.call_args.kwargs
+        assert call_kwargs["customfield_10464"] == {"id": "10609"}
 
 
 # ─── search_issues_by_team ───────────────────────────────────────────────────

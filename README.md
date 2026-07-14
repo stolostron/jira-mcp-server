@@ -24,7 +24,7 @@ JIRA_EMAIL=<your-email>@redhat.com
 
 4. **Reconnect** — In Claude Code run `/mcp` to reconnect, or restart your client (Cursor, Gemini CLI, etc.)
 
-All custom field IDs and work type IDs have been updated in the code. No other changes needed.
+All custom field IDs and activity type IDs have been updated in the code. No other changes needed.
 
 ## Table of Contents
 
@@ -591,7 +591,7 @@ The `/jira-create` command provides a guided, interactive flow for creating Jira
 
 1. **Issue Type** — Select from Story, Bug, Task, Spike, Feature, Epic, or Sub-task
 2. **Specialist Agent** — A specialist agent (e.g., `story-specialist`, `bug-specialist`) is launched to help craft the summary and description based on the issue type
-3. **Core Fields** — Priority, Work Type, Original Estimate, Story Points
+3. **Core Fields** — Priority, Activity Type, Original Estimate, Story Points
 4. **Categorization** — Component, Labels, Target Version
 5. **Parent / Linking** — Link to a parent issue or related issues
 6. **Confirmation** — Review all fields before creation

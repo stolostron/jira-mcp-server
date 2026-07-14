@@ -55,7 +55,7 @@ These are hardcoded in `server.py` — if migrating to a different Jira instance
 | Field | Jira ID |
 |---|---|
 | Target Version | `customfield_10855` |
-| Work Type (Activity Type) | `customfield_10464` |
+| Activity Type (formerly Work Type) | `customfield_10464` |
 | Target Start | `customfield_10022` |
 | Target End | `customfield_10023` |
 | Story Points | `customfield_10028` |
