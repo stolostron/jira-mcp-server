@@ -1,9 +1,6 @@
 # Jira MCP Server
 
-> **Fork of [stolostron/jira-mcp-server](https://github.com/stolostron/jira-mcp-server)**
-> (originally created by Jeff Packer / jnpacker).
-> This fork adds Red Hat custom field support, Jira Cloud migration, and attachment/inline image capabilities.
-> Upstream PR: [stolostron/jira-mcp-server#24](https://github.com/stolostron/jira-mcp-server/pull/24)
+[![CI](https://github.com/stolostron/jira-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/stolostron/jira-mcp-server/actions/workflows/ci.yml)
 
 A Model Context Protocol (MCP) server that provides seamless integration with Jira instances. This server enables AI applications to interact with Jira issues, projects, and workflows through a standardized interface.
 
@@ -27,7 +24,7 @@ JIRA_EMAIL=<your-email>@redhat.com
 
 4. **Reconnect** — In Claude Code run `/mcp` to reconnect, or restart your client (Cursor, Gemini CLI, etc.)
 
-All custom field IDs and work type IDs have been updated in the code. No other changes needed.
+All custom field IDs and activity type IDs have been updated in the code. No other changes needed.
 
 ## Table of Contents
 
@@ -72,7 +69,7 @@ All custom field IDs and work type IDs have been updated in the code. No other c
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/atifshafi/jira-mcp-server.git
+git clone https://github.com/stolostron/jira-mcp-server.git
 cd jira-mcp-server
 ```
 
@@ -659,7 +656,7 @@ The `/jira-create` command provides a guided, interactive flow for creating Jira
 
 1. **Issue Type** — Select from Story, Bug, Task, Spike, Feature, Epic, or Sub-task
 2. **Specialist Agent** — A specialist agent (e.g., `story-specialist`, `bug-specialist`) is launched to help craft the summary and description based on the issue type
-3. **Core Fields** — Priority, Work Type, Original Estimate, Story Points
+3. **Core Fields** — Priority, Activity Type, Original Estimate, Story Points
 4. **Categorization** — Component, Labels, Target Version
 5. **Parent / Linking** — Link to a parent issue or related issues
 6. **Confirmation** — Review all fields before creation
@@ -698,18 +695,22 @@ This check is non-blocking and fails silently if the repository is not available
 
 ```bash
 make help              # Show available targets
-make tests             # Run all tests in the tests/ directory
+make bootstrap         # Create .venv and install package + dev deps
+make verify-startup    # Smoke-test fastmcp + server imports
+make test              # Run all tests in the tests/ directory
+make lint              # Run ruff linter
+make lint-fix          # Run ruff linter with auto-fix
+make format            # Auto-format with black and isort
+make format-check      # Check black and isort without writing
+make check             # Run format-check, lint, and test
 make install-commands  # Symlink project commands to ~/.claude/commands/
 ```
 
 ### Running Tests
 
-Run all tests with:
 ```bash
-make tests
+make test
 ```
-
-This runs all test_*.py files using pytest with verbose output.
 
 ### Setting up Development Environment
 
@@ -720,19 +721,28 @@ pip install -e ".[dev]"
 
 2. Run tests:
 ```bash
-make tests
+make test
 ```
 
-3. Format code:
+3. Lint:
 ```bash
-black jira_mcp_server/
-isort jira_mcp_server/
+make lint       # check
+make lint-fix   # auto-fix
 ```
 
-4. Type checking:
+4. Format code:
+```bash
+make format
+```
+
+5. Type checking:
 ```bash
 mypy jira_mcp_server/
 ```
+
+### CI
+
+GitHub Actions runs tests (Python 3.10, 3.11, 3.12) and lint on every push to `main` and every pull request. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ### Project Structure
 

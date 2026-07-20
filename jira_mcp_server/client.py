@@ -682,7 +682,7 @@ class JiraClient:
                     }
 
             # Create the issue link
-            response = await self._async_call(
+            await self._async_call(
                 lambda: self._jira.create_issue_link(
                     type=link_type,
                     inwardIssue=inward_issue,
@@ -1182,10 +1182,10 @@ class JiraClient:
             ],
             "target_version": [
                 v.name for v in getattr(issue.fields, "customfield_10855", []) or []
-            ],
-            "work_type": self._extract_custom_field_value(
+            ],  # Target Version custom field
+            "activity_type": self._extract_custom_field_value(
                 getattr(issue.fields, "customfield_10464", None)
-            ),
+            ),  # Activity Type
             "security_level": (
                 getattr(issue.fields.security, "name", None)
                 if getattr(issue.fields, "security", None)

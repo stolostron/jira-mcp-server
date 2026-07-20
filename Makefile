@@ -5,7 +5,7 @@ SHELL := /bin/bash
 # Prefer repo .venv when present (avoids broken global fastmcp installs).
 PYTHON := $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 
-.PHONY: help test tests lint format format-check install-commands verify-startup bootstrap
+.PHONY: help test tests lint lint-fix format format-check check install-commands verify-startup bootstrap
 
 .DEFAULT_GOAL := help
 
@@ -16,9 +16,11 @@ help:
 	@echo "  verify-startup   - Smoke-test fastmcp + server imports"
 	@echo "  test             - Run all tests in the tests/ directory"
 	@echo "  tests            - Alias for test"
-	@echo "  lint             - Run pytest, black, and isort checks"
+	@echo "  lint             - Run ruff linter"
+	@echo "  lint-fix         - Run ruff linter with auto-fix"
 	@echo "  format           - Auto-format with black and isort"
 	@echo "  format-check     - Check black and isort without writing"
+	@echo "  check            - Run format-check, lint, and test"
 	@echo "  install-commands - Symlink project commands to ~/.claude/commands/"
 	@echo "  help             - Show this help message"
 	@echo ""
@@ -36,7 +38,7 @@ verify-startup:
 test tests:
 	$(PYTHON) -m pytest tests/ -v
 
-lint: format-check test
+check: format-check lint test
 
 format:
 	$(PYTHON) -m black jira_mcp_server tests
@@ -45,6 +47,12 @@ format:
 format-check:
 	$(PYTHON) -m black --check jira_mcp_server tests
 	$(PYTHON) -m isort --check-only jira_mcp_server tests
+
+lint:
+	$(PYTHON) -m ruff check jira_mcp_server/ tests/
+
+lint-fix:
+	$(PYTHON) -m ruff check --fix jira_mcp_server/ tests/
 
 install-commands:
 	@mkdir -p "$(HOME)/.claude/commands"

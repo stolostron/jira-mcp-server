@@ -16,10 +16,8 @@
 
 """Main MCP server implementation for Jira."""
 
-import asyncio
 import logging
 import os
-import re
 import subprocess
 from typing import Any, Dict, List, Optional
 
@@ -37,6 +35,46 @@ logger = logging.getLogger(__name__)
 # Statuses that do NOT require fix_version to be set
 # Any status not in this set will require fix_version before transitioning
 EARLY_STATUSES = {"new", "backlog", "in progress"}
+
+# Mapping of Activity Type (customfield_10464) labels to their numeric option IDs.
+# Jira's API requires the numeric ID when writing this field; reads return the
+# label string instead, so this map lets callers pass either form.
+ACTIVITY_TYPE_MAP = {
+    "None": "-1",
+    "Associate Wellness & Development": "10604",
+    "BU Features": "10605",
+    "Future Sustainability": "10606",
+    "Incidents & Support": "10607",
+    "Quality / Stability / Reliability": "10608",
+    "Security & Compliance": "10609",
+    "Product / Portfolio Work": "10610",
+}
+
+
+def _resolve_activity_type(value: str) -> str:
+    """Resolve an Activity Type label or numeric ID to a numeric ID string.
+
+    Accepts either the human-readable label (e.g. "Security & Compliance") or
+    the numeric option ID (e.g. "10609") and always returns the numeric ID
+    string expected by Jira's API. If the value is neither a recognized label
+    nor a numeric ID, a ValueError is raised so the caller doesn't silently
+    submit an invalid value to Jira.
+
+    Args:
+        value: The activity type label or numeric ID
+
+    Returns:
+        The numeric ID string
+
+    Raises:
+        ValueError: If the value is not a recognized label or numeric ID
+    """
+    if value in ACTIVITY_TYPE_MAP:
+        return ACTIVITY_TYPE_MAP[value]
+    if value.lstrip("-").isdigit():
+        return value
+    supported = ", ".join(ACTIVITY_TYPE_MAP.keys())
+    raise ValueError(f"Unknown Activity Type: {value!r}. Supported labels: {supported}")
 
 
 def _user_ref(identifier: str) -> Dict[str, str]:
@@ -146,7 +184,7 @@ class IssueResponse(BaseModel):
     url: str
     fix_versions: List[str]
     target_version: List[str]
-    work_type: Optional[str]
+    activity_type: Optional[str]
     security_level: Optional[str]
     due_date: Optional[str]
     target_start: Optional[str]
@@ -399,7 +437,7 @@ class JiraMCPServer:
             summary: str,
             description: str,
             priority: str = "Normal",
-            work_type: Optional[str] = None,
+            activity_type: Optional[str] = None,
             components: Optional[List[str]] = None,
             target_version: Optional[List[str]] = None,
             issue_type: str = "Task",
@@ -440,7 +478,7 @@ class JiraMCPServer:
                 labels: List of labels to add
                 fix_versions: List of fix version names (set when issue is closed)
                 target_version: List of target version names (set when issue is created)
-                work_type: Work type for the issue (STRONGLY RECOMMENDED). Available options:
+                activity_type: Activity Type for the issue (STRONGLY RECOMMENDED). Available options:
                     - **None** = -1
                     - **Associate Wellness & Development** = 10604
                     - **BU Features** = 10605
@@ -503,10 +541,10 @@ class JiraMCPServer:
                 fields["customfield_10855"] = [
                     {"name": version} for version in target_version
                 ]
-            if work_type:
+            if activity_type:
                 fields["customfield_10464"] = {
-                    "id": str(work_type)
-                }  # Activity Type (formerly Work Type)
+                    "id": _resolve_activity_type(activity_type)
+                }  # Activity Type
             if security_level:
                 fields["security"] = {"name": security_level}
             if due_date:
@@ -597,7 +635,7 @@ class JiraMCPServer:
         async def update_issue(
             issue_key: str,
             priority: Optional[str] = None,
-            work_type: Optional[str] = None,
+            activity_type: Optional[str] = None,
             components: Optional[List[str]] = None,
             due_date: Optional[str] = None,
             summary: Optional[str] = None,
@@ -632,7 +670,7 @@ class JiraMCPServer:
                 labels: New labels list
                 fix_versions: List of fix version names (set when issue is closed)
                 target_version: List of target version names (set when issue is created)
-                work_type: Work type for the issue (STRONGLY RECOMMENDED). Available options:
+                activity_type: Activity Type for the issue (STRONGLY RECOMMENDED). Available options:
                     - **None** = -1
                     - **Associate Wellness & Development** = 10604
                     - **BU Features** = 10605
@@ -683,10 +721,10 @@ class JiraMCPServer:
                 fields["customfield_10855"] = [
                     {"name": version} for version in target_version
                 ]
-            if work_type:
+            if activity_type:
                 fields["customfield_10464"] = {
-                    "id": str(work_type)
-                }  # Activity Type (formerly Work Type)
+                    "id": _resolve_activity_type(activity_type)
+                }  # Activity Type
             if security_level:
                 fields["security"] = {"name": security_level}
             if due_date:
@@ -1528,7 +1566,7 @@ class JiraMCPServer:
 - **Components:** {', '.join(issue['components']) if issue['components'] else 'None'}
 - **Fix Versions:** {', '.join(issue['fix_versions']) if issue['fix_versions'] else 'None'}
 - **Target Version:** {', '.join(issue['target_version']) if issue['target_version'] else 'None'}
-- **Work Type:** {issue['work_type'] or 'None'}
+- **Activity Type:** {issue['activity_type'] or 'None'}
 - **Security Level:** {issue['security_level'] or 'None'}
 - **Due Date:** {issue['due_date'] or 'None'}
 - **Target Start:** {issue['target_start'] or 'None'}
