@@ -25,33 +25,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          # --- TEMPORARY DEBUG: dump raw gh pr list data for the first open
-          # PR so we can see exactly what the workflow's GH_TOKEN observes
-          # (author login format, mergeable state, labels, check states).
-          # This diverges from what a personal PAT sees locally against the
-          # same PR, which is why the eligibility filter below has not been
-          # matching despite local jq tests passing. Remove this block once
-          # the real mismatch is identified and fixed.
-          echo "=== DEBUG: raw gh pr list output (first open PR) ==="
-          gh pr list --state open --base main --limit 1 \
-            --json number,author,headRefName,mergeable,labels,statusCheckRollup \
-            | jq '.[0] | {
-                number,
-                author,
-                headRefName,
-                mergeable,
-                labels: [.labels[]?.name],
-                checks: [.statusCheckRollup[] | {
-                  name: (.name // .context),
-                  type: .__typename,
-                  state,
-                  conclusion,
-                  status
-                }]
-              }'
-          echo "=== END DEBUG ==="
-          # --- END TEMPORARY DEBUG ---
-
           # Only PRs authored by the trusted swarmer-jnpacker[bot] GitHub App
           # identity, targeting main, are eligible for auto-merge. gh pr
           # list's GraphQL-backed --json author renders bot logins as
@@ -62,7 +35,10 @@ jobs:
           # "automated-update" label. Also require the PR to be mergeable
           # and every non-tide check to have completed successfully (not
           # just "at least one success" - a pending check must not count as
-          # passing).
+          # passing). Note: GitHub computes `mergeable` asynchronously, so
+          # a PR can transiently report "UNKNOWN" on one API call and
+          # "MERGEABLE" moments later once GitHub finishes the check - this
+          # is expected and not something to special-case here.
           prs=$(gh pr list --state open --base main --limit 100 --json number,title,url,author,headRefName,headRefOid,statusCheckRollup,mergeable,labels --jq '
             .[] | select(
               (.author.login == "swarmer-jnpacker[bot]" or .author.login == "app/swarmer-jnpacker") and
