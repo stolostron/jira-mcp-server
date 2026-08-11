@@ -26,16 +26,19 @@ jobs:
           set -euo pipefail
 
           # Only PRs authored by the trusted swarmer-jnpacker[bot] GitHub App
-          # identity, targeting main, are eligible for auto-merge. In
-          # addition, the PR must either be on a dependency-update branch
-          # (created by the swarm-deps-agent bot) or carry the
+          # identity, targeting main, are eligible for auto-merge. gh pr
+          # list's GraphQL-backed --json author renders bot logins as
+          # "app/swarmer-jnpacker" (not the "swarmer-jnpacker[bot]" form
+          # used by the REST API and web UI), so match both spellings.
+          # In addition, the PR must either be on a dependency-update
+          # branch (created by the swarm-deps-agent bot) or carry the
           # "automated-update" label. Also require the PR to be mergeable
           # and every non-tide check to have completed successfully (not
           # just "at least one success" - a pending check must not count as
           # passing).
           prs=$(gh pr list --state open --base main --limit 100 --json number,title,url,author,headRefName,headRefOid,statusCheckRollup,mergeable,labels --jq '
             .[] | select(
-              (.author.login == "swarmer-jnpacker[bot]") and
+              (.author.login == "swarmer-jnpacker[bot]" or .author.login == "app/swarmer-jnpacker") and
               (
                 (.headRefName | test("^(fix|build|deps)/(go|python)-(deps|update)-")) or
                 (.labels // [] | any(.name == "automated-update"))
