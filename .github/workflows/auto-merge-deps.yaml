@@ -43,7 +43,9 @@ jobs:
               (.mergeable == "MERGEABLE") and
               ([.statusCheckRollup[] | select(.context != "tide" and .name != "tide")] as $checks |
                 ($checks | length > 0) and
-                ($checks | all(.state == "SUCCESS" or .conclusion == "SUCCESS")))
+                ($checks | all(
+                  ((.state // "" | ascii_upcase) == "SUCCESS") or
+                  ((.conclusion // "" | ascii_upcase) == "SUCCESS"))))
             )')
 
           if [ -z "$prs" ]; then
