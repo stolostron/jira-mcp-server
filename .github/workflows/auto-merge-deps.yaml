@@ -6,9 +6,7 @@ on:
     # Every 30 min, 13:30-17:00 UTC, Mon-Fri.
     # Covers 9:30am-12pm ET across both EDT (UTC-4) and EST (UTC-5), since
     # GitHub Actions cron is UTC-only and does not observe DST.
-    - cron: "30 13 * * 1-5" # 13:30 UTC
-    - cron: "0,30 14-16 * * 1-5" # 14:00, 14:30, 15:00, 15:30, 16:00, 16:30 UTC
-    - cron: "0 17 * * 1-5" # 17:00 UTC
+    - cron: "0,30 12-17 * * 1-5" # 14:00, 14:30, 15:00, 15:30, 16:00, 16:30 UTC 
 
 jobs:
   auto-merge:
