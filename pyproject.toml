@@ -10,16 +10,16 @@ authors = [
     {name = "Your Name", email = "your.email@example.com"},
 ]
 dependencies = [
-    "fastmcp>=3.4.6",
+    "fastmcp>=3.4.7",
     "jira>=3.10.5",
-    "pydantic>=2.13.4",
+    "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
     "asyncio-throttle>=1.0.2",
-    "python-dotenv>=1.2.2",
-    "uvicorn>=0.52.1",
-    "authlib>=1.7.2",
+    "python-dotenv>=1.2.3",
+    "uvicorn>=0.52.4",
+    "authlib>=1.8.0",
     "starlette>=1.6.0",
-    "cryptography>=50.0.0",  # CVE-2026-69247 (PYSEC-2026-3552): pin transitive dep from authlib
+    "cryptography>=50.0.1",  # CVE-2026-69247 (PYSEC-2026-3552): pin transitive dep from authlib
 ]
 requires-python = ">=3.10"
 readme = "README.md"
@@ -30,10 +30,10 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "black>=26.5.1",
-    "isort>=8.0.1",
-    "mypy>=2.3.0",
+    "isort>=9.0.1",
+    "mypy>=2.3.1",
     "pip-audit>=2.10.1",
-    "ruff>=0.16.2",
+    "ruff>=0.16.5",
 ]
 
 [project.scripts]
