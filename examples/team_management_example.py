@@ -70,7 +70,7 @@ async def main():
 
     # List all teams
     all_teams = config.list_teams()
-    print(f"\nAll teams:")
+    print("\nAll teams:")
     for team_name, members in all_teams.items():
         print(f"  - {team_name}: {', '.join(members)}")
     print()
@@ -127,15 +127,15 @@ async def main():
     print("-" * 60)
     print("""
     Best Practices:
-    
+
     1. **Define teams by function**: frontend, backend, devops, qa
     2. **Keep teams updated**: Use add_team() to update member lists
     3. **Use meaningful names**: Make team names clear and descriptive
     4. **Configure per environment**: Different teams for prod vs staging
     5. **Combine with labels**: Use labels + teams for full visibility
-    
+
     Example workflow:
-    
+
     1. Configure teams in .env or dynamically
     2. Create issue with team parameter:
        create_issue(..., team="frontend")
