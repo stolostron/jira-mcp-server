@@ -50,7 +50,7 @@ async def main():
 
                 # List available tools
                 tools = await session.list_tools()
-                print(f"\nAvailable tools:")
+                print("\nAvailable tools:")
                 for tool in tools.tools:
                     print(f"  - {tool.name}: {tool.description}")
 
@@ -62,7 +62,7 @@ async def main():
                     for project in result.content:
                         if hasattr(project, "text"):
                             # Parse the JSON response
-                            projects_data = json.loads(content.text)
+                            projects_data = json.loads(project.text)
                             for project in projects_data:
                                 print(f"  - {project['key']}: {project['name']}")
                         else:
