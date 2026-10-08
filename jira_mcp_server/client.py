@@ -231,6 +231,82 @@ class JiraClient:
         except JIRAError as e:
             raise ValueError(f"Failed to add comment to {issue_key}: {e}")
 
+    async def edit_comment(
+        self,
+        issue_key: str,
+        comment_id: str,
+        comment: str,
+        secure_comment: bool = False,
+    ) -> Dict[str, Any]:
+        """Edit an issue comment without weakening an existing restriction."""
+        if not self._jira:
+            raise RuntimeError("Not connected to Jira")
+        if not issue_key.strip():
+            raise ValueError("Issue key must not be blank")
+        if not comment_id.strip():
+            raise ValueError("Comment ID must not be blank")
+        if not comment.strip():
+            raise ValueError("Comment text must not be blank")
+
+        try:
+            # The issue-scoped endpoint both verifies ownership and obtains the
+            # latest visibility immediately before the update. python-jira does
+            # not expose conditional/version-guarded comment updates.
+            comment_obj = await self._async_call(
+                lambda: self._jira.comment(issue_key, comment_id)
+            )
+            update_kwargs: Dict[str, Any] = {"body": comment}
+            if secure_comment and not getattr(comment_obj, "visibility", None):
+                update_kwargs["visibility"] = {
+                    "type": "group",
+                    "value": "Red Hat Employee",
+                }
+
+            await self._async_call(lambda: comment_obj.update(**update_kwargs))
+            return {
+                "id": str(comment_obj.id),
+                "body": comment_obj.body,
+                "author": comment_obj.author.displayName,
+                "created": comment_obj.created,
+                "updated": comment_obj.updated,
+            }
+        except JIRAError as e:
+            raise ValueError(
+                f"Failed to edit comment {comment_id} on {issue_key}: {e}"
+            )
+
+    async def delete_comment(self, issue_key: str, comment_id: str) -> Dict[str, Any]:
+        """Delete a specific issue comment after Jira confirms the deletion."""
+        if not self._jira:
+            raise RuntimeError("Not connected to Jira")
+        if not issue_key.strip():
+            raise ValueError("Issue key must not be blank")
+        if not comment_id.strip():
+            raise ValueError("Comment ID must not be blank")
+
+        try:
+            comment_obj = await self._async_call(
+                lambda: self._jira.comment(issue_key, comment_id)
+            )
+            response = await self._async_call(lambda: comment_obj.delete())
+            # Jira's DELETE endpoint commonly confirms success with an empty
+            # HTTP 204 response. A missing response (e.g. python-jira async mode)
+            # is not confirmation, so do not report success in that case.
+            status_code = getattr(response, "status_code", None)
+            if status_code is None or not 200 <= status_code < 300:
+                raise RuntimeError(
+                    f"Jira did not confirm deletion of comment {comment_id}"
+                )
+            return {
+                "issue_key": issue_key,
+                "comment_id": comment_id,
+                "deleted": True,
+            }
+        except JIRAError as e:
+            raise ValueError(
+                f"Failed to delete comment {comment_id} on {issue_key}: {e}"
+            )
+
     async def log_work(
         self,
         issue_key: str,

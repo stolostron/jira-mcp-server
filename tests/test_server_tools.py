@@ -409,3 +409,93 @@ class TestGetIssue:
 
         server.client.get_issue.assert_called_once_with("TEST-1")
         assert result is not None
+
+
+# ─── comment management ──────────────────────────────────────────────────────
+
+
+class TestCommentManagement:
+    @pytest.mark.asyncio
+    async def test_edit_comment_returns_typed_result_and_defaults_public(self, server):
+        comment_data = {
+            "id": "10001",
+            "body": "Updated text",
+            "author": "Test User",
+            "created": "2026-01-01T00:00:00.000+0000",
+            "updated": "2026-01-02T00:00:00.000+0000",
+        }
+        server.client.edit_comment = AsyncMock(return_value=comment_data)
+
+        async with Client(server.mcp) as client:
+            result = await client.call_tool(
+                "edit_comment",
+                {
+                    "issue_key": "TEST-1",
+                    "comment_id": "10001",
+                    "comment": "Updated text",
+                },
+            )
+
+        server.client.edit_comment.assert_called_once_with(
+            "TEST-1", "10001", "Updated text", False
+        )
+        assert result.structured_content == comment_data
+
+    @pytest.mark.asyncio
+    async def test_edit_comment_rejects_blank_inputs(self, server):
+        async with Client(server.mcp) as client:
+            with pytest.raises(Exception):
+                await client.call_tool(
+                    "edit_comment",
+                    {
+                        "issue_key": "TEST-1",
+                        "comment_id": "10001",
+                        "comment": "   ",
+                    },
+                )
+        server.client.edit_comment.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_edit_comment_rejects_blank_key_and_comment_id(self, server):
+        async with Client(server.mcp) as client:
+            for args in (
+                {"issue_key": " ", "comment_id": "10001", "comment": "Text"},
+                {"issue_key": "TEST-1", "comment_id": "\t", "comment": "Text"},
+            ):
+                with pytest.raises(Exception):
+                    await client.call_tool("edit_comment", args)
+        server.client.edit_comment.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_delete_comment_response_and_destructive_annotation(self, server):
+        server.client.delete_comment = AsyncMock(
+            return_value={
+                "issue_key": "TEST-1",
+                "comment_id": "10001",
+                "deleted": True,
+            }
+        )
+
+        async with Client(server.mcp) as client:
+            result = await client.call_tool(
+                "delete_comment", {"issue_key": "TEST-1", "comment_id": "10001"}
+            )
+            tools = await client.list_tools()
+
+        server.client.delete_comment.assert_called_once_with("TEST-1", "10001")
+        assert result.structured_content == {
+            "issue_key": "TEST-1",
+            "comment_id": "10001",
+            "deleted": True,
+        }
+        delete_tool = next(tool for tool in tools if tool.name == "delete_comment")
+        assert delete_tool.annotations.destructiveHint is True
+
+    @pytest.mark.asyncio
+    async def test_edit_tool_exposes_secure_comment_default(self, server):
+        async with Client(server.mcp) as client:
+            tools = await client.list_tools()
+
+        edit_tool = next(tool for tool in tools if tool.name == "edit_comment")
+        assert edit_tool.inputSchema["properties"]["secure_comment"]["default"] is False
+        assert "security_level" not in edit_tool.inputSchema["properties"]

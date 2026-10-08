@@ -50,7 +50,7 @@ All custom field IDs and activity type IDs have been updated in the code. No oth
 - **Issue Linking**: Create links between issues with different relationship types (blocks, relates to, etc.)
 - **Project Access**: List and browse Jira projects and components
 - **User Search**: Find Jira users by name, email, or username for assignment
-- **Comments**: Add comments to issues with security levels
+- **Comments**: Add, edit, and delete issue comments with safe visibility handling
 - **Time Logging**: Log work time on issues with detailed comments
 - **Workflow Enforcement**: Requires fix_version before transitioning beyond "In Progress"
 - **JQL Support**: Full Jira Query Language support for advanced searching
@@ -351,7 +351,8 @@ Cursor is a code editor that supports MCP servers for AI-powered development ass
 
 ## Available Tools
 
-The server provides the following MCP tools:
+The server provides the following MCP tools. See the
+[tool specifications](docs/README.md) for contracts, behavior, and response details.
 
 ### `search_issues`
 Search for issues using JQL (Jira Query Language):
@@ -423,6 +424,35 @@ add_comment(
     issue_key="PROJ-123",
     comment="This has been resolved"
 )
+```
+
+### `edit_comment`
+Edit a specific comment using its ID. Find comment IDs in the `comments` list
+returned by `get_issue(issue_key="PROJ-123")`:
+```python
+edit_comment(
+    issue_key="PROJ-123",
+    comment_id="10001",
+    comment="Updated comment text",
+    secure_comment=False,  # Optional; defaults to False
+)
+```
+
+Edits preserve the existing visibility. A public comment remains public unless
+`secure_comment=True`, which restricts it to the **Red Hat Employee** group.
+Comments already restricted to a group or project role retain that restriction
+regardless of `secure_comment`; edits cannot remove or replace an existing
+restriction. The tool checks the comment's visibility immediately before the
+update, but Jira/python-jira does not provide a conditional comment update, so
+another actor could change visibility between that check and the write. The
+visibility check and update are therefore not atomic.
+
+### `delete_comment`
+Permanently delete a specific comment identified by both its issue key and
+comment ID (obtain the ID from `get_issue`). Deletion is destructive and cannot
+be undone:
+```python
+delete_comment(issue_key="PROJ-123", comment_id="10001")
 ```
 
 ### `link_issue`

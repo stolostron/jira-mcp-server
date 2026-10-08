@@ -181,6 +181,12 @@ class CommentResponse(BaseModel):
     updated: str
 
 
+class DeleteCommentResponse(BaseModel):
+    issue_key: str
+    comment_id: str
+    deleted: bool
+
+
 class WorkLogResponse(BaseModel):
     id: str
     time_spent: str
@@ -799,6 +805,79 @@ class JiraMCPServer:
             except Exception as e:
                 if ctx:
                     await ctx.error(f"Failed to add comment to {issue_key}: {str(e)}")
+                raise
+
+        @self.mcp.tool()
+        async def edit_comment(
+            issue_key: str,
+            comment_id: str,
+            comment: str,
+            secure_comment: bool = False,
+            ctx: Optional[Context] = None,
+        ) -> CommentResponse:
+            """Edit a comment identified by its issue key and comment ID.
+
+            Existing group- or role-restricted visibility is preserved. Set
+            secure_comment to restrict a currently public comment to the Red Hat
+            Employee group; this option cannot make a comment public.
+            """
+            if ctx:
+                await ctx.info(f"Editing comment {comment_id} on {issue_key}")
+
+            try:
+                if not issue_key.strip():
+                    raise ValueError("Issue key must not be blank")
+                if not comment_id.strip():
+                    raise ValueError("Comment ID must not be blank")
+                if not comment.strip():
+                    raise ValueError("Comment text must not be blank")
+                comment_data = await self.client.edit_comment(
+                    issue_key, comment_id, comment, secure_comment
+                )
+                if ctx:
+                    await ctx.info(f"Edited comment {comment_id} on {issue_key}")
+                return CommentResponse(**comment_data)
+            except Exception as e:
+                if ctx:
+                    await ctx.error(
+                        f"Failed to edit comment {comment_id} on {issue_key}: {str(e)}"
+                    )
+                raise
+
+        @self.mcp.tool(
+            annotations={
+                "title": "Delete Jira issue comment",
+                "destructiveHint": True,
+                "idempotentHint": False,
+                "openWorldHint": True,
+            }
+        )
+        async def delete_comment(
+            issue_key: str,
+            comment_id: str,
+            ctx: Optional[Context] = None,
+        ) -> DeleteCommentResponse:
+            """Permanently delete the identified comment from the Jira issue.
+
+            This is destructive and cannot be undone.
+            """
+            if ctx:
+                await ctx.info(f"Deleting comment {comment_id} from {issue_key}")
+
+            try:
+                if not issue_key.strip():
+                    raise ValueError("Issue key must not be blank")
+                if not comment_id.strip():
+                    raise ValueError("Comment ID must not be blank")
+                result = await self.client.delete_comment(issue_key, comment_id)
+                if ctx:
+                    await ctx.info(f"Deleted comment {comment_id} from {issue_key}")
+                return DeleteCommentResponse(**result)
+            except Exception as e:
+                if ctx:
+                    await ctx.error(
+                        f"Failed to delete comment {comment_id} from {issue_key}: {str(e)}"
+                    )
                 raise
 
         @self.mcp.tool()
