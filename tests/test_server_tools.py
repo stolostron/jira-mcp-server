@@ -111,6 +111,9 @@ class TestResolveActivityType:
     def test_label_resolves_to_numeric_id(self):
         assert _resolve_activity_type("Security & Compliance") == "10609"
 
+    def test_label_matching_is_case_insensitive(self):
+        assert _resolve_activity_type("security & COMPLIANCE") == "10609"
+
     def test_all_known_labels_resolve(self):
         expected = {
             "None": "-1",
@@ -127,6 +130,7 @@ class TestResolveActivityType:
 
     def test_numeric_id_passes_through(self):
         assert _resolve_activity_type("10609") == "10609"
+        assert _resolve_activity_type(10609) == "10609"
 
     def test_negative_numeric_id_passes_through(self):
         assert _resolve_activity_type("-1") == "-1"
@@ -205,6 +209,13 @@ class TestCreateIssue:
     @pytest.mark.asyncio
     async def test_activity_type_label_resolved_to_numeric_id(self, server):
         server.client.create_issue = AsyncMock(return_value=FAKE_ISSUE)
+        server.client.get_create_meta = AsyncMock(
+            return_value={
+                "customfield_10464": {
+                    "allowedValues": [{"id": "12199", "value": "Future Sustainability"}]
+                }
+            }
+        )
 
         async with Client(server.mcp) as client:
             await client.call_tool(
@@ -213,16 +224,18 @@ class TestCreateIssue:
                     "project_key": "TEST",
                     "summary": "Fix it",
                     "description": "desc",
-                    "activity_type": "Security & Compliance",
+                    "activity_type": "Future Sustainability",
                 },
             )
 
         call_kwargs = server.client.create_issue.call_args.kwargs
-        assert call_kwargs["customfield_10464"] == {"id": "10609"}
+        assert call_kwargs["customfield_10464"] == {"id": "12199"}
+        server.client.get_create_meta.assert_awaited_once_with("TEST", "Task")
 
     @pytest.mark.asyncio
     async def test_activity_type_numeric_id_passthrough(self, server):
         server.client.create_issue = AsyncMock(return_value=FAKE_ISSUE)
+        server.client.get_create_meta = AsyncMock()
 
         async with Client(server.mcp) as client:
             await client.call_tool(
@@ -231,19 +244,30 @@ class TestCreateIssue:
                     "project_key": "TEST",
                     "summary": "Fix it",
                     "description": "desc",
-                    "activity_type": "10609",
+                    "activity_type": 10609,
                 },
             )
 
         call_kwargs = server.client.create_issue.call_args.kwargs
         assert call_kwargs["customfield_10464"] == {"id": "10609"}
+        server.client.get_create_meta.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_unknown_activity_type_raises(self, server):
         server.client.create_issue = AsyncMock(return_value=FAKE_ISSUE)
+        server.client.get_create_meta = AsyncMock(
+            return_value={
+                "customfield_10464": {
+                    "allowedValues": [
+                        {"id": "12199", "value": "Future Sustainability"},
+                        {"id": "12203", "value": "BU Features"},
+                    ]
+                }
+            }
+        )
 
         async with Client(server.mcp) as client:
-            with pytest.raises(Exception):
+            with pytest.raises(Exception, match=r"Future Sustainability \(12199\)"):
                 await client.call_tool(
                     "create_issue",
                     {
@@ -284,28 +308,144 @@ class TestUpdateIssue:
     @pytest.mark.asyncio
     async def test_activity_type_label_resolved_to_numeric_id(self, server):
         server.client.update_issue = AsyncMock(return_value=FAKE_ISSUE)
+        server.client.get_issue = AsyncMock(
+            return_value={"project": "TEST", "issue_type": "Task"}
+        )
+        server.client.get_editmeta = AsyncMock(
+            return_value={
+                "customfield_10464": {
+                    "allowedValues": [
+                        {"id": "12206", "value": "Security & Compliance"}
+                    ]
+                }
+            }
+        )
 
         async with Client(server.mcp) as client:
             await client.call_tool(
                 "update_issue",
-                {"issue_key": "TEST-1", "activity_type": "Security & Compliance"},
+                {"issue_key": "TEST-1", "activity_type": "security & compliance"},
             )
 
         call_kwargs = server.client.update_issue.call_args.kwargs
-        assert call_kwargs["customfield_10464"] == {"id": "10609"}
+        assert call_kwargs["customfield_10464"] == {"id": "12206"}
+        server.client.get_editmeta.assert_awaited_once_with("TEST-1")
 
     @pytest.mark.asyncio
     async def test_activity_type_numeric_id_passthrough(self, server):
         server.client.update_issue = AsyncMock(return_value=FAKE_ISSUE)
+        server.client.get_issue = AsyncMock()
+        server.client.get_editmeta = AsyncMock()
 
         async with Client(server.mcp) as client:
             await client.call_tool(
                 "update_issue",
-                {"issue_key": "TEST-1", "activity_type": "10609"},
+                {"issue_key": "TEST-1", "activity_type": 10609},
             )
 
         call_kwargs = server.client.update_issue.call_args.kwargs
         assert call_kwargs["customfield_10464"] == {"id": "10609"}
+        server.client.get_issue.assert_not_awaited()
+        server.client.get_editmeta.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_create_activity_type_options_are_cached_per_project_and_issue_type(
+        self, server
+    ):
+        server.client.create_issue = AsyncMock(return_value=FAKE_ISSUE)
+        server.client.get_create_meta = AsyncMock(
+            return_value={
+                "customfield_10464": {
+                    "allowedValues": [{"id": "12207", "value": "BU Features"}]
+                }
+            }
+        )
+
+        async with Client(server.mcp) as client:
+            for _ in range(2):
+                await client.call_tool(
+                    "create_issue",
+                    {
+                        "project_key": "FLD",
+                        "summary": "Fix it",
+                        "description": "desc",
+                        "activity_type": "bu features",
+                    },
+                )
+
+        assert server.client.create_issue.call_args.kwargs["customfield_10464"] == {
+            "id": "12207"
+        }
+        server.client.get_create_meta.assert_awaited_once_with("FLD", "Task")
+
+    @pytest.mark.asyncio
+    async def test_create_metadata_cache_is_scoped_by_project_and_issue_type(
+        self, server
+    ):
+        server.client.create_issue = AsyncMock(return_value=FAKE_ISSUE)
+        server.client.get_create_meta = AsyncMock(
+            side_effect=[
+                {
+                    "customfield_10464": {
+                        "allowedValues": [{"id": "1", "value": "BU Features"}]
+                    }
+                },
+                {
+                    "customfield_10464": {
+                        "allowedValues": [{"id": "2", "value": "BU Features"}]
+                    }
+                },
+                {
+                    "customfield_10464": {
+                        "allowedValues": [{"id": "3", "value": "BU Features"}]
+                    }
+                },
+            ]
+        )
+
+        async with Client(server.mcp) as client:
+            for project_key, issue_type in (
+                ("FLD", "Task"),
+                ("FLD", "Bug"),
+                ("OTHER", "Task"),
+            ):
+                await client.call_tool(
+                    "create_issue",
+                    {
+                        "project_key": project_key,
+                        "issue_type": issue_type,
+                        "summary": "Fix it",
+                        "description": "desc",
+                        "activity_type": "BU Features",
+                    },
+                )
+
+        ids = [
+            call.kwargs["customfield_10464"]["id"]
+            for call in server.client.create_issue.call_args_list
+        ]
+        assert ids == ["1", "2", "3"]
+        assert server.client.get_create_meta.await_count == 3
+
+    @pytest.mark.asyncio
+    async def test_create_metadata_failure_falls_back_to_static_mapping(self, server):
+        server.client.create_issue = AsyncMock(return_value=FAKE_ISSUE)
+        server.client.get_create_meta = AsyncMock(side_effect=RuntimeError("offline"))
+
+        async with Client(server.mcp) as client:
+            await client.call_tool(
+                "create_issue",
+                {
+                    "project_key": "TEST",
+                    "summary": "Fix it",
+                    "description": "desc",
+                    "activity_type": "Future Sustainability",
+                },
+            )
+
+        assert server.client.create_issue.call_args.kwargs["customfield_10464"] == {
+            "id": "10606"
+        }
 
 
 # ─── search_issues_by_team ───────────────────────────────────────────────────

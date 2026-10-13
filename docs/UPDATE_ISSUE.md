@@ -10,7 +10,7 @@ Update supplied Jira issue fields and return the refreshed issue.
 update_issue(
     issue_key: str,
     priority: Optional[str] = None,
-    activity_type: Optional[str] = None,
+    activity_type: Optional[str | int] = None,
     components: Optional[List[str]] = None,
     due_date: Optional[str] = None,
     summary: Optional[str] = None,
@@ -34,7 +34,7 @@ update_issue(
 |---|---|---|
 | `issue_key` | Yes | Issue to update. |
 | `summary`, `description`, `priority`, `security_level` | No | Replacement content or Jira option names. |
-| `activity_type` | No | Recognized global label or numeric option ID. |
+| `activity_type` | No | Activity Type label or numeric option ID. Labels are matched case-insensitively against the issue's edit metadata and cached per project/issue type. Numeric IDs pass through without a metadata request. |
 | `components` | No | Component names or configured aliases. |
 | `labels`, `fix_versions`, `target_version` | No | Replacement lists; versions use names. |
 | `assignee` | No | User identifier resolved to a Cloud account ID. |
@@ -45,7 +45,7 @@ update_issue(
 
 ## Execution
 
-1. Map supplied fields; resolve assignee, activity option ID, and component aliases.
+1. Map supplied fields; resolve assignee, Activity Type option ID from the issue's edit metadata (falling back to the legacy mapping when metadata is unavailable), and component aliases.
 2. Validate a supplied commit SHA and require at least one effective update.
 3. Update and refresh through `_async_call`; convert duration estimates to minutes.
 
@@ -58,8 +58,9 @@ The refreshed [IssueResponse](GET_ISSUE.md).
 
 ## Errors
 
-Reject requests with no effective fields or invalid commit SHAs. Surface
-resolution, connection, lookup, permission, update, and refresh failures.
+Reject requests with no effective fields or invalid commit SHAs. An unsupported
+Activity Type label reports the options available for the issue's project.
+Surface resolution, connection, lookup, permission, update, and refresh failures.
 
 ## Verification Requirements
 

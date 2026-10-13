@@ -666,6 +666,42 @@ class JiraClient:
         except JIRAError as e:
             raise ValueError(f"Failed to get edit metadata for {issue_key}: {e}") from e
 
+    async def get_create_meta(
+        self, project_key: str, issue_type: str
+    ) -> Dict[str, Any]:
+        """Get create metadata fields for a project and issue type."""
+        if not self._jira:
+            raise RuntimeError("Not connected to Jira")
+
+        try:
+            url = f"{self._jira._options['server']}/rest/api/2/issue/createmeta"
+            params = {
+                "projectKeys": project_key,
+                "issuetypeNames": issue_type,
+                "expand": "projects.issuetypes.fields",
+            }
+            response = await self._async_call(
+                lambda: self._jira._session.get(url, params=params)
+            )
+            if not response.ok:
+                raise ValueError(
+                    f"Failed to get create metadata for {project_key}/{issue_type}: "
+                    f"HTTP {response.status_code}"
+                )
+
+            data: Dict[str, Any] = response.json()
+            for project in data.get("projects", []):
+                if project.get("key", "").casefold() != project_key.casefold():
+                    continue
+                for type_data in project.get("issuetypes", []):
+                    if type_data.get("name", "").casefold() == issue_type.casefold():
+                        return type_data.get("fields", {})
+            return {}
+        except JIRAError as e:
+            raise ValueError(
+                f"Failed to get create metadata for {project_key}/{issue_type}: {e}"
+            ) from e
+
     async def add_watcher(self, issue_key: str, username: str) -> Dict[str, Any]:
         """Add a watcher to an issue.
 
