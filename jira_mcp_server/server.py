@@ -51,7 +51,9 @@ ACTIVITY_TYPE_MAP = {
 }
 
 
-def _resolve_activity_type(value: str) -> str:
+def _resolve_activity_type(
+    value: str | int, options: Optional[Dict[str, str]] = None
+) -> str:
     """Resolve an Activity Type label or numeric ID to a numeric ID string.
 
     Accepts either the human-readable label (e.g. "Security & Compliance") or
@@ -69,12 +71,31 @@ def _resolve_activity_type(value: str) -> str:
     Raises:
         ValueError: If the value is not a recognized label or numeric ID
     """
-    if value in ACTIVITY_TYPE_MAP:
-        return ACTIVITY_TYPE_MAP[value]
-    if value.lstrip("-").isdigit():
-        return value
-    supported = ", ".join(ACTIVITY_TYPE_MAP.keys())
-    raise ValueError(f"Unknown Activity Type: {value!r}. Supported labels: {supported}")
+    value_text = str(value)
+    if value_text.lstrip("-").isdigit():
+        return value_text
+    labels = options if options is not None else ACTIVITY_TYPE_MAP
+    normalized_options = {
+        label.casefold(): option_id for label, option_id in labels.items()
+    }
+    if value_text.strip().casefold() in normalized_options:
+        return normalized_options[value_text.strip().casefold()]
+    supported = ", ".join(labels.keys())
+    raise ValueError(
+        f"Unknown Activity Type: {value_text!r}. Supported labels: {supported}"
+    )
+
+
+def _activity_type_options(field_metadata: Dict[str, Any]) -> Dict[str, str]:
+    """Extract display labels and option IDs from Jira field metadata."""
+    options: Dict[str, str] = {}
+    for option in field_metadata.get("allowedValues", []):
+        if not isinstance(option, dict) or option.get("id") is None:
+            continue
+        label = option.get("value") or option.get("name")
+        if label:
+            options[str(label)] = str(option["id"])
+    return options
 
 
 def _validate_git_commit_sha(sha: str) -> None:
@@ -253,10 +274,67 @@ class JiraMCPServer:
         self.mcp = FastMCP("Jira MCP Server")
         self.config = JiraConfig.from_env()
         self.client = JiraClient(self.config)
+        self._activity_type_options_cache: Dict[
+            tuple[str, str, str], Dict[str, str]
+        ] = {}
         self._update_warning: Optional[str] = None
         self._update_warning_emitted = False
         self._setup_tools()
         self._setup_resources()
+
+    async def _resolve_activity_type_for_context(
+        self,
+        value: str | int,
+        project_key: Optional[str],
+        issue_type: Optional[str],
+        operation: str,
+        issue_key: Optional[str] = None,
+    ) -> str:
+        """Resolve an Activity Type using project-specific Jira metadata."""
+        value_text = str(value)
+        if value_text.lstrip("-").isdigit():
+            return value_text
+
+        cache_key = None
+        options = None
+        if project_key and issue_type:
+            cache_key = (operation, project_key.casefold(), issue_type.casefold())
+            if cache_key in self._activity_type_options_cache:
+                options = self._activity_type_options_cache[cache_key]
+            else:
+                try:
+                    if operation == "create":
+                        metadata = await self.client.get_create_meta(
+                            project_key, issue_type
+                        )
+                    elif issue_key:
+                        metadata = await self.client.get_editmeta(issue_key)
+                    else:
+                        metadata = {}
+                    field_metadata = metadata.get("customfield_10464", {})
+                    options = _activity_type_options(field_metadata)
+                    self._activity_type_options_cache[cache_key] = options
+                except Exception as error:
+                    logger.warning(
+                        "Unable to load Activity Type options for %s/%s (%s): %s",
+                        project_key,
+                        issue_type,
+                        operation,
+                        error,
+                    )
+
+        if options:
+            try:
+                return _resolve_activity_type(value, options)
+            except ValueError as error:
+                available = ", ".join(
+                    f"{label} ({option_id})" for label, option_id in options.items()
+                )
+                raise ValueError(
+                    f"Unknown Activity Type: {value_text!r}. Available options for "
+                    f"{project_key} ({issue_type}): {available}"
+                ) from error
+        return _resolve_activity_type(value)
 
     def _setup_tools(self) -> None:
         """Set up MCP tools for Jira operations."""
@@ -383,7 +461,7 @@ class JiraMCPServer:
             summary: str,
             description: str,
             priority: str = "Normal",
-            activity_type: Optional[str] = None,
+            activity_type: Optional[str | int] = None,
             components: Optional[List[str]] = None,
             target_version: Optional[List[str]] = None,
             issue_type: str = "Task",
@@ -419,15 +497,8 @@ class JiraMCPServer:
                 labels: List of labels to add
                 fix_versions: List of fix version names (set when issue is closed)
                 target_version: List of target version names (set when issue is created)
-                activity_type: Activity Type for the issue (STRONGLY RECOMMENDED). Available options:
-                    - **None** = -1
-                    - **Associate Wellness & Development** = 10604
-                    - **BU Features** = 10605
-                    - **Future Sustainability** = 10606
-                    - **Incidents & Support** = 10607
-                    - **Quality / Stability / Reliability** = 10608
-                    - **Security & Compliance** = 10609
-                    - **Product / Portfolio Work** = 10610
+                activity_type: Activity Type label or numeric option ID. Labels are
+                    matched against this project's options when Jira metadata is available.
                 security_level: Security level name
                 due_date: Due date in YYYY-MM-DD format
                 target_start: Target start date in YYYY-MM-DD format
@@ -479,7 +550,9 @@ class JiraMCPServer:
                 ]
             if activity_type:
                 fields["customfield_10464"] = {
-                    "id": _resolve_activity_type(activity_type)
+                    "id": await self._resolve_activity_type_for_context(
+                        activity_type, project_key, issue_type, "create"
+                    )
                 }  # Activity Type
             if security_level:
                 fields["security"] = {"name": security_level}
@@ -546,7 +619,7 @@ class JiraMCPServer:
         async def update_issue(
             issue_key: str,
             priority: Optional[str] = None,
-            activity_type: Optional[str] = None,
+            activity_type: Optional[str | int] = None,
             components: Optional[List[str]] = None,
             due_date: Optional[str] = None,
             summary: Optional[str] = None,
@@ -576,15 +649,8 @@ class JiraMCPServer:
                 labels: New labels list
                 fix_versions: List of fix version names (set when issue is closed)
                 target_version: List of target version names (set when issue is created)
-                activity_type: Activity Type for the issue (STRONGLY RECOMMENDED). Available options:
-                    - **None** = -1
-                    - **Associate Wellness & Development** = 10604
-                    - **BU Features** = 10605
-                    - **Future Sustainability** = 10606
-                    - **Incidents & Support** = 10607
-                    - **Quality / Stability / Reliability** = 10608
-                    - **Security & Compliance** = 10609
-                    - **Product / Portfolio Work** = 10610
+                activity_type: Activity Type label or numeric option ID. Labels are
+                    matched against this project's options when Jira metadata is available.
                 security_level: Security level name
                 due_date: Due date in YYYY-MM-DD format
                 target_start: Target start date in YYYY-MM-DD format
@@ -623,8 +689,21 @@ class JiraMCPServer:
                     {"name": version} for version in target_version
                 ]
             if activity_type:
+                if str(activity_type).lstrip("-").isdigit():
+                    resolved_activity_type = str(activity_type)
+                else:
+                    issue_context = await self.client.get_issue(issue_key)
+                    resolved_activity_type = (
+                        await self._resolve_activity_type_for_context(
+                            activity_type,
+                            issue_context.get("project"),
+                            issue_context.get("issue_type"),
+                            "edit",
+                            issue_key,
+                        )
+                    )
                 fields["customfield_10464"] = {
-                    "id": _resolve_activity_type(activity_type)
+                    "id": resolved_activity_type
                 }  # Activity Type
             if security_level:
                 fields["security"] = {"name": security_level}

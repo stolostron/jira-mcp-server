@@ -13,7 +13,7 @@ create_issue(
     summary: str,
     description: str,
     priority: str = "Normal",
-    activity_type: Optional[str] = None,
+    activity_type: Optional[str | int] = None,
     components: Optional[List[str]] = None,
     target_version: Optional[List[str]] = None,
     issue_type: str = "Task",
@@ -38,7 +38,7 @@ create_issue(
 |---|---|---|
 | `project_key`, `summary`, `description` | Yes | Target project and content; summary/description must not be blank. |
 | `priority`, `issue_type` | No | Default to `Normal` and `Task`. |
-| `activity_type` | No | Recognized global label or numeric option ID; Jira may require a project-specific ID. |
+| `activity_type` | No | Activity Type label or numeric option ID. Labels are matched case-insensitively against the target project's create metadata and cached per project/issue type. Numeric IDs pass through without a metadata request. |
 | `components` | No | Component names or configured aliases. |
 | `target_version`, `fix_versions` | No | Version names; a supplied fix-version list must not be empty. |
 | `due_date`, `target_start`, `target_end` | No | Dates in `YYYY-MM-DD` format. |
@@ -53,7 +53,7 @@ create_issue(
 ## Execution
 
 1. Validate content, supplied assignee/fix versions, and commit SHA.
-2. Resolve assignee, activity option ID, and component aliases; map Jira fields.
+2. Resolve assignee, Activity Type option ID from project/issue-type create metadata (falling back to the legacy mapping when metadata is unavailable), and component aliases; map Jira fields.
 3. Create through `_async_call`; convert duration estimates to minute strings.
 4. If requested, add team watchers; watcher failures do not roll back creation.
 
@@ -65,7 +65,8 @@ warning; per-member failures are not included in this response.
 ## Errors
 
 Surface validation, assignee-resolution, disconnected-client, permission, and
-Jira creation errors. Jira enforces project/issue-type required fields.
+Jira creation errors. An unsupported Activity Type label reports the available
+project options. Jira enforces project/issue-type required fields.
 
 ## Verification Requirements
 
