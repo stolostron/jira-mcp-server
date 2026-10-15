@@ -60,8 +60,8 @@ def jira_client():
     [
         (None, False, None),
         (None, True, {"type": "group", "value": "Red Hat Employee"}),
-        ({"type": "group", "value": "Engineering"}, False, None),
-        ({"type": "role", "value": "Administrators"}, True, None),
+        ({"type": "group", "value": "Engineering"}, True, None),
+        ({"type": "role", "value": "Administrators"}, False, None),
     ],
 )
 async def test_edit_comment_visibility_rules(
